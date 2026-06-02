@@ -1,0 +1,140 @@
+import { NextRequest, NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
+import { createModuleSchema } from "@/lib/validations/modules";
+import { z } from "zod";
+
+export async function GET() {
+  try {
+    const modulesList = await prisma.modules.findMany({
+      include: {
+        permissions: true,
+        _count: {
+          select: {
+            roles: true,
+          },
+        },
+      },
+      orderBy: {
+        name: "asc",
+      },
+    });
+
+    const formattedModules = modulesList.map((mod) => ({
+      id: mod.id,
+      name: mod.name,
+      code: mod.code,
+      description: mod.description,
+      createdAt: mod.created_at,
+      updatedAt: mod.updated_at,
+      rolesCount: mod._count.roles,
+      permissions: mod.permissions.map((perm) => ({
+        id: perm.id,
+        name: perm.name,
+        key: perm.key,
+        description: perm.description,
+      })),
+    }));
+
+    return NextResponse.json(formattedModules, { status: 200 });
+  } catch (error: any) {
+    console.error("Failed to fetch modules:", error);
+    return NextResponse.json(
+      { error: "Internal Server Error", details: error.message },
+      { status: 500 }
+    );
+  }
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    const body = await request.json();
+    const result = createModuleSchema.safeParse(body);
+
+    if (!result.success) {
+      return NextResponse.json(
+        { error: "Validation failed", details: z.treeifyError(result.error) },
+        { status: 400 }
+      );
+    }
+
+    const { name, code, description, permissionIds } = result.data;
+
+    // Check if module name already exists
+    const existingName = await prisma.modules.findUnique({
+      where: { name: name.trim() },
+    });
+    if (existingName) {
+      return NextResponse.json(
+        { error: "A module with this name already exists" },
+        { status: 400 }
+      );
+    }
+
+    // Check if module code already exists
+    const existingCode = await prisma.modules.findUnique({
+      where: { code: code.trim().toLowerCase() },
+    });
+    if (existingCode) {
+      return NextResponse.json(
+        { error: "A module with this code already exists" },
+        { status: 400 }
+      );
+    }
+
+    const newModule = await prisma.$transaction(async (tx) => {
+      const mod = await tx.modules.create({
+        data: {
+          name: name.trim(),
+          code: code.trim().toLowerCase(),
+          description: description ? description.trim() : null,
+        },
+      });
+
+      if (Array.isArray(permissionIds) && permissionIds.length > 0) {
+        // Link permissions to this module
+        await tx.permissions.updateMany({
+          where: {
+            id: { in: permissionIds },
+          },
+          data: {
+            module_id: mod.id,
+          },
+        });
+      }
+
+      return tx.modules.findUnique({
+        where: { id: mod.id },
+        include: {
+          permissions: true,
+        },
+      });
+    });
+
+    if (!newModule) {
+      throw new Error("Failed to retrieve created module");
+    }
+
+    const formattedModule = {
+      id: newModule.id,
+      name: newModule.name,
+      code: newModule.code,
+      description: newModule.description,
+      createdAt: newModule.created_at,
+      updatedAt: newModule.updated_at,
+      permissions: newModule.permissions.map((perm) => ({
+        id: perm.id,
+        name: perm.name,
+        key: perm.key,
+        description: perm.description,
+      })),
+    };
+
+    return NextResponse.json(formattedModule, { status: 201 });
+  } catch (error: any) {
+    console.error("Failed to create module:", error);
+    return NextResponse.json(
+      { error: "Internal Server Error", details: error.message },
+      { status: 500 }
+    );
+  }
+}

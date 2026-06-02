@@ -13,42 +13,52 @@ import {
   SidebarHeader,
   SidebarRail,
 } from "@/components/ui/sidebar"
-import { RiGalleryLine, RiPulseLine, RiCommandLine, RiTerminalBoxLine, RiRobotLine, RiBookOpenLine, RiSettingsLine, RiCropLine, RiPieChartLine, RiMapLine } from "@remixicon/react"
+import { RiGalleryLine, RiPulseLine, RiCommandLine, RiTerminalBoxLine, RiRobotLine, RiBookOpenLine, RiSettingsLine, RiCropLine, RiPieChartLine, RiMapLine, RiShieldUserLine } from "@remixicon/react"
 
 // This is sample data.
 const data = {
   user: {
-    name: "shadcn",
-    email: "m@example.com",
-    avatar: "/avatars/shadcn.jpg",
+    name: "Admin User",
+    email: "admin@itvault.com",
+    avatar: "/avatars/admin.jpg",
   },
   teams: [
     {
-      name: "Acme Inc",
+      name: "IT Vault",
       logo: (
         <RiGalleryLine
         />
       ),
       plan: "Enterprise",
     },
-    {
-      name: "Acme Corp.",
-      logo: (
-        <RiPulseLine
-        />
-      ),
-      plan: "Startup",
-    },
-    {
-      name: "Evil Corp.",
-      logo: (
-        <RiCommandLine
-        />
-      ),
-      plan: "Free",
-    },
   ],
   navMain: [
+    {
+      title: "Administration",
+      url: "#",
+      icon: (
+        <RiShieldUserLine />
+      ),
+      isActive: true,
+      items: [
+        {
+          title: "Users",
+          url: "/users",
+        },
+        {
+          title: "Roles",
+          url: "/roles",
+        },
+        {
+          title: "Modules",
+          url: "/modules",
+        },
+        {
+          title: "Permissions",
+          url: "/permissions",
+        },
+      ],
+    },
     {
       title: "Playground",
       url: "#",
@@ -56,7 +66,6 @@ const data = {
         <RiTerminalBoxLine
         />
       ),
-      isActive: true,
       items: [
         {
           title: "History",

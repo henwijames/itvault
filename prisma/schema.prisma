@@ -95,8 +95,24 @@ model roles {
 
   users       user_roles[]
   permissions role_permissions[]
+  modules     role_modules[]
 
   @@map("roles")
+}
+
+model modules {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  code        String   @unique
+  description String?
+
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+
+  permissions permissions[]
+  roles       role_modules[]
+
+  @@map("modules")
 }
 
 model permissions {
@@ -105,6 +121,9 @@ model permissions {
   name        String  @unique
   key         String  @unique
   description String?
+
+  module_id   String?
+  module      modules? @relation(fields: [module_id], references: [id], onDelete: SetNull)
 
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
@@ -134,6 +153,17 @@ model role_permissions {
 
   @@id([role_id, permission_id])
   @@map("role_permissions")
+}
+
+model role_modules {
+  role_id   String
+  module_id String
+
+  role   roles   @relation(fields: [role_id], references: [id], onDelete: Cascade)
+  module modules @relation(fields: [module_id], references: [id], onDelete: Cascade)
+
+  @@id([role_id, module_id])
+  @@map("role_modules")
 }
 
 //
