@@ -1,0 +1,422 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client"
+  output   = "../lib/generated/prisma"
+}
+
+datasource db {
+  provider = "mysql"
+}
+
+enum user_status {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+}
+
+enum ticket_status {
+  OPEN
+  IN_PROGRESS
+  PENDING
+  RESOLVED
+  CLOSED
+  CANCELLED
+}
+
+enum ticket_priority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum asset_status {
+  ACTIVE
+  RETIRED
+  LOST
+  REPAIR
+}
+
+enum subscription_status {
+  ACTIVE
+  EXPIRED
+  CANCELLED
+}
+
+enum account_type {
+  SHOP
+  ACCOMMODATION
+}
+
+//
+// USERS (LOGIN)
+//
+
+model users {
+  id String @id @default(cuid())
+
+  name     String
+  email    String @unique
+  password String
+
+  status user_status @default(ACTIVE)
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  roles user_roles[]
+
+  staff staff?
+
+  created_tickets  tickets[]         @relation("created_tickets")
+  assigned_tickets tickets[]         @relation("assigned_tickets")
+  comments         ticket_comments[]
+
+  @@map("users")
+}
+
+//
+// RBAC
+//
+
+model roles {
+  id String @id @default(cuid())
+
+  name        String  @unique
+  description String?
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  users       user_roles[]
+  permissions role_permissions[]
+
+  @@map("roles")
+}
+
+model permissions {
+  id String @id @default(cuid())
+
+  name        String  @unique
+  key         String  @unique
+  description String?
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  roles role_permissions[]
+
+  @@map("permissions")
+}
+
+model user_roles {
+  user_id String
+  role_id String
+
+  user users @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  role roles @relation(fields: [role_id], references: [id], onDelete: Cascade)
+
+  @@id([user_id, role_id])
+  @@map("user_roles")
+}
+
+model role_permissions {
+  role_id       String
+  permission_id String
+
+  role       roles       @relation(fields: [role_id], references: [id], onDelete: Cascade)
+  permission permissions @relation(fields: [permission_id], references: [id], onDelete: Cascade)
+
+  @@id([role_id, permission_id])
+  @@map("role_permissions")
+}
+
+//
+// COMPANY STRUCTURE
+//
+
+model branches {
+  id String @id @default(cuid())
+
+  name    String
+  code    String?
+  address String?
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  staff                      staff[]
+  assets                     assets[]
+  tickets                    tickets[]
+  internet_accounts_current  internet_accounts[] @relation("current_branch")
+  internet_accounts_original internet_accounts[] @relation("original_branch")
+
+  subscriptions subscriptions[]
+
+  @@map("branches")
+}
+
+//
+// STAFF (includes managers)
+//
+
+model staff {
+  id String @id @default(cuid())
+
+  user_id   String? @unique
+  branch_id String
+
+  first_name String
+  last_name  String
+
+  email         String?
+  mobile_number String?
+
+  position  String?
+  is_active Boolean @default(true)
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  user   users?   @relation(fields: [user_id], references: [id])
+  branch branches @relation(fields: [branch_id], references: [id])
+
+  tickets tickets[]
+
+  @@map("staff")
+}
+
+//
+// INTERNET ACCOUNTS (UPDATED WITH MIGRATION SUPPORT)
+//
+
+model internet_accounts {
+  id String @id @default(cuid())
+
+  branch_id          String
+  original_branch_id String?
+
+  account_type account_type
+
+  provider_source String?
+
+  account_holder_name String
+  contact_number      String?
+
+  account_number  String
+  shipment_number String?
+
+  date_of_birth      DateTime?
+  emirates_id_number String?
+  emirates_id_expiry DateTime?
+
+  start_date        DateTime?
+  contract_end_date DateTime?
+
+  notes String? @db.Text
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  branch          branches  @relation("current_branch", fields: [branch_id], references: [id])
+  original_branch branches? @relation("original_branch", fields: [original_branch_id], references: [id])
+
+  migrations internet_account_migrations[]
+
+  @@map("internet_accounts")
+}
+
+//
+// INTERNET ACCOUNT MIGRATIONS (NEW)
+//
+
+model internet_account_migrations {
+  id String @id @default(cuid())
+
+  internet_account_id String
+
+  from_branch_id String
+  to_branch_id   String
+
+  reason String?
+
+  migrated_at DateTime @default(now())
+
+  internet_account internet_accounts @relation(fields: [internet_account_id], references: [id])
+
+  @@map("internet_account_migrations")
+}
+
+//
+// SUBSCRIPTIONS
+//
+
+model subscriptions {
+  id String @id @default(cuid())
+
+  branch_id String
+
+  name     String
+  provider String?
+
+  account_email    String?
+  account_username String?
+  account_password String?
+
+  start_date  DateTime?
+  expiry_date DateTime?
+
+  amount Decimal? @db.Decimal(10, 2)
+
+  status subscription_status @default(ACTIVE)
+
+  notes String? @db.Text
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  branch branches @relation(fields: [branch_id], references: [id])
+
+  @@map("subscriptions")
+}
+
+//
+// ASSETS
+//
+
+model assets {
+  id String @id @default(cuid())
+
+  branch_id String
+
+  asset_tag String? @unique
+
+  name     String
+  category String
+
+  brand         String?
+  model         String?
+  serial_number String?
+
+  purchase_date   DateTime?
+  warranty_expiry DateTime?
+
+  status asset_status @default(ACTIVE)
+
+  notes String? @db.Text
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  branch branches @relation(fields: [branch_id], references: [id])
+
+  @@map("assets")
+}
+
+//
+// TICKETS
+//
+
+model ticket_categories {
+  id String @id @default(cuid())
+
+  name        String  @unique
+  description String?
+
+  tickets tickets[]
+
+  @@map("ticket_categories")
+}
+
+model tickets {
+  id String @id @default(cuid())
+
+  ticket_number String @unique
+
+  branch_id String
+  staff_id  String?
+
+  category_id String?
+
+  created_by_id  String
+  assigned_to_id String?
+
+  title       String
+  description String @db.Text
+
+  status   ticket_status   @default(OPEN)
+  priority ticket_priority @default(MEDIUM)
+
+  response_due_at DateTime?
+  resolved_at     DateTime?
+  closed_at       DateTime?
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  branch branches @relation(fields: [branch_id], references: [id])
+  staff  staff?   @relation(fields: [staff_id], references: [id])
+
+  category ticket_categories? @relation(fields: [category_id], references: [id])
+
+  created_by  users  @relation("created_tickets", fields: [created_by_id], references: [id])
+  assigned_to users? @relation("assigned_tickets", fields: [assigned_to_id], references: [id])
+
+  comments    ticket_comments[]
+  attachments ticket_attachments[]
+  activities  ticket_activities[]
+
+  @@map("tickets")
+}
+
+model ticket_comments {
+  id String @id @default(cuid())
+
+  ticket_id String
+  user_id   String
+
+  comment String @db.Text
+
+  created_at DateTime @default(now())
+
+  ticket tickets @relation(fields: [ticket_id], references: [id])
+  user   users   @relation(fields: [user_id], references: [id])
+
+  @@map("ticket_comments")
+}
+
+model ticket_attachments {
+  id String @id @default(cuid())
+
+  ticket_id String
+
+  filename String
+  filepath String
+  filesize Int?
+
+  created_at DateTime @default(now())
+
+  ticket tickets @relation(fields: [ticket_id], references: [id])
+
+  @@map("ticket_attachments")
+}
+
+model ticket_activities {
+  id String @id @default(cuid())
+
+  ticket_id String
+
+  action      String
+  description String?
+
+  created_at DateTime @default(now())
+
+  ticket tickets @relation(fields: [ticket_id], references: [id])
+
+  @@map("ticket_activities")
+}
