@@ -24,6 +24,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -60,6 +68,17 @@ import {
   BreadcrumbPage,
 } from "@/components/ui/breadcrumb";
 
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+
 interface UserRole {
   id: string;
   name: string;
@@ -88,6 +107,7 @@ export default function UsersPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [userToDelete, setUserToDelete] = useState<User | null>(null);
 
   // Form logic for Create User
   const createForm = useForm<CreateUserInput>({
@@ -183,8 +203,14 @@ export default function UsersPage() {
     }
   };
 
-  const handleDeleteUser = async (user: User) => {
-    if (!confirm(`Are you sure you want to delete ${user.name}?`)) return;
+  const handleDeleteUser = (user: User) => {
+    setUserToDelete(user);
+  };
+
+  const confirmDeleteUser = async () => {
+    if (!userToDelete) return;
+    const user = userToDelete;
+    setUserToDelete(null);
     const toastId = toast.loading("Deleting user...");
     try {
       await axios.delete(`/api/users/${user.id}`);
@@ -432,15 +458,20 @@ export default function UsersPage() {
                     name="status"
                     control={activeForm.control}
                     render={({ field }) => (
-                      <select
-                        id="status"
-                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 font-medium"
-                        {...field}
+                      <Select
+                        onValueChange={field.onChange}
+                        defaultValue={field.value}
+                        value={field.value}
                       >
-                        <option value="ACTIVE">Active</option>
-                        <option value="INACTIVE">Inactive</option>
-                        <option value="SUSPENDED">Suspended</option>
-                      </select>
+                        <SelectTrigger className="w-full h-10 border border-input bg-background font-medium text-sm rounded-md px-3">
+                          <SelectValue placeholder="Select Status" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="ACTIVE">Active</SelectItem>
+                          <SelectItem value="INACTIVE">Inactive</SelectItem>
+                          <SelectItem value="SUSPENDED">Suspended</SelectItem>
+                        </SelectContent>
+                      </Select>
                     )}
                   />
                 </div>
@@ -462,17 +493,15 @@ export default function UsersPage() {
                                 const isChecked = selected.includes(r.id);
                                 return (
                                   <label key={r.id} className="flex items-center gap-1.5 p-0.5 hover:bg-muted/50 rounded cursor-pointer text-xs font-semibold">
-                                    <input
-                                      type="checkbox"
+                                    <Checkbox
                                       checked={isChecked}
-                                      onChange={() => {
-                                        if (isChecked) {
-                                          field.onChange(selected.filter((id: string) => id !== r.id));
-                                        } else {
+                                      onCheckedChange={(checked) => {
+                                        if (checked) {
                                           field.onChange([...selected, r.id]);
+                                        } else {
+                                          field.onChange(selected.filter((id: string) => id !== r.id));
                                         }
                                       }}
-                                      className="rounded border-border text-primary size-3.5"
                                     />
                                     <span>{r.name}</span>
                                   </label>
@@ -503,6 +532,27 @@ export default function UsersPage() {
             </form>
           </DialogContent>
         </Dialog>
+
+        <AlertDialog open={!!userToDelete} onOpenChange={(open) => !open && setUserToDelete(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This action cannot be undone. This will permanently delete the user account for{" "}
+                <strong>{userToDelete?.name}</strong> and remove their data from our servers.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={confirmDeleteUser}
+                className="bg-destructive hover:bg-destructive/90 text-destructive-foreground"
+              >
+                Delete
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </SidebarInset>
     </SidebarProvider>
   );

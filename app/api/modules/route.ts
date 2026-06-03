@@ -6,12 +6,9 @@ import { z } from "zod";
 export async function GET() {
   try {
     const modulesList = await prisma.modules.findMany({
-      include: {
-        permissions: true,
-        _count: {
-          select: {
-            roles: true,
-          },
+      where: {
+        status: {
+          not: "DELETED",
         },
       },
       orderBy: {
@@ -23,16 +20,10 @@ export async function GET() {
       id: mod.id,
       name: mod.name,
       code: mod.code,
+      status: mod.status,
       description: mod.description,
       createdAt: mod.created_at,
       updatedAt: mod.updated_at,
-      rolesCount: mod._count.roles,
-      permissions: mod.permissions.map((perm) => ({
-        id: perm.id,
-        name: perm.name,
-        key: perm.key,
-        description: perm.description,
-      })),
     }));
 
     return NextResponse.json(formattedModules, { status: 200 });
@@ -57,7 +48,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { name, code, description, permissionIds } = result.data;
+    const { name, code, description } = result.data;
 
     // Check if module name already exists
     const existingName = await prisma.modules.findUnique({
@@ -90,23 +81,8 @@ export async function POST(request: NextRequest) {
         },
       });
 
-      if (Array.isArray(permissionIds) && permissionIds.length > 0) {
-        // Link permissions to this module
-        await tx.permissions.updateMany({
-          where: {
-            id: { in: permissionIds },
-          },
-          data: {
-            module_id: mod.id,
-          },
-        });
-      }
-
       return tx.modules.findUnique({
         where: { id: mod.id },
-        include: {
-          permissions: true,
-        },
       });
     });
 
@@ -121,12 +97,6 @@ export async function POST(request: NextRequest) {
       description: newModule.description,
       createdAt: newModule.created_at,
       updatedAt: newModule.updated_at,
-      permissions: newModule.permissions.map((perm) => ({
-        id: perm.id,
-        name: perm.name,
-        key: perm.key,
-        description: perm.description,
-      })),
     };
 
     return NextResponse.json(formattedModule, { status: 201 });

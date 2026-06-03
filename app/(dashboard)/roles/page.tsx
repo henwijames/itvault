@@ -12,6 +12,9 @@ import {
   RiSettingsLine,
   RiCpuLine,
   RiShieldKeyholeLine,
+  RiEditLine,
+  RiDeleteBinLine,
+  RiMore2Fill,
 } from "@remixicon/react";
 
 import { createRoleSchema, type CreateRoleInput } from "@/lib/validations/roles";
@@ -19,6 +22,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Table,
   TableBody,
@@ -35,6 +39,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { AppSidebar } from "@/components/app-sidebar";
 import {
   SidebarInset,
@@ -48,6 +58,17 @@ import {
   BreadcrumbList,
   BreadcrumbPage,
 } from "@/components/ui/breadcrumb";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+
 
 interface Role {
   id: string;
@@ -71,6 +92,7 @@ interface Permission {
   id: string;
   name: string;
   key: string;
+  module_id: string | null;
 }
 
 interface Module {
@@ -86,7 +108,9 @@ export default function RolesPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [editingRole, setEditingRole] = useState<Role | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [roleToDelete, setRoleToDelete] = useState<Role | null>(null);
 
   const {
     register,
@@ -97,8 +121,7 @@ export default function RolesPage() {
   } = useForm<CreateRoleInput>({
     resolver: zodResolver(createRoleSchema),
     defaultValues: {
-      permissionIds: [],
-      moduleIds: [],
+      roleModulePermissions: [],
     },
   });
 
@@ -125,22 +148,73 @@ export default function RolesPage() {
     fetchData();
   }, []);
 
+  useEffect(() => {
+    if (editingRole) {
+      reset({
+        name: editingRole.name,
+        description: editingRole.description || "",
+        roleModulePermissions: (editingRole as any).roleModulePermissions?.map((rmp: any) => ({
+          moduleId: rmp.moduleId,
+          permissionId: rmp.permissionId,
+        })) || [],
+      });
+    } else {
+      reset({
+        name: "",
+        description: "",
+        roleModulePermissions: [],
+      });
+    }
+  }, [editingRole, isCreateOpen]);
+
+  const openCreateDialog = () => {
+    setEditingRole(null);
+    setIsCreateOpen(true);
+  };
+
+  const openEditDialog = (role: Role) => {
+    setEditingRole(role);
+    setIsCreateOpen(true);
+  };
+
+  const handleDeleteRole = (role: Role) => {
+    setRoleToDelete(role);
+  };
+
+  const confirmDeleteRole = async () => {
+    if (!roleToDelete) return;
+    const role = roleToDelete;
+    setRoleToDelete(null);
+    const toastId = toast.loading("Deleting role...");
+    try {
+      await axios.delete(`/api/roles/${role.id}`);
+      toast.success("Role deleted successfully!", { id: toastId });
+      fetchData();
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || "Failed to delete role", { id: toastId });
+    }
+  };
+
   const onSubmit = async (data: CreateRoleInput) => {
     setSubmitting(true);
-    const toastId = toast.loading("Creating role...");
+    const toastId = toast.loading(editingRole ? "Updating role..." : "Creating role...");
     try {
-      await axios.post("/api/roles", data);
-      toast.success("Role created successfully!", { id: toastId });
+      if (editingRole) {
+        await axios.put(`/api/roles/${editingRole.id}`, data);
+        toast.success("Role updated successfully!", { id: toastId });
+      } else {
+        await axios.post("/api/roles", data);
+        toast.success("Role created successfully!", { id: toastId });
+      }
       setIsCreateOpen(false);
       reset({
         name: "",
         description: "",
-        permissionIds: [],
-        moduleIds: [],
+        roleModulePermissions: [],
       });
       fetchData();
     } catch (err: any) {
-      toast.error(err.response?.data?.error || "Failed to create role", { id: toastId });
+      toast.error(err.response?.data?.error || (editingRole ? "Failed to update role" : "Failed to create role"), { id: toastId });
     } finally {
       setSubmitting(false);
     }
@@ -181,7 +255,7 @@ export default function RolesPage() {
                 Manage roles and define access permissions on specific modules.
               </p>
             </div>
-            <Button onClick={() => setIsCreateOpen(true)} className="sm:self-start">
+            <Button onClick={openCreateDialog} className="sm:self-start">
               <RiAddLine className="mr-1.5 size-4" data-icon="inline-start" />
               Add Role
             </Button>
@@ -203,17 +277,17 @@ export default function RolesPage() {
             <Table>
               <TableHeader>
                 <TableRow className="bg-muted/40">
-                  <TableHead className="w-[180px]">Role Name</TableHead>
+                  <TableHead>Role Name</TableHead>
                   <TableHead>Description</TableHead>
-                  <TableHead className="w-[100px] text-center">Users</TableHead>
-                  <TableHead className="w-[200px]">Modules</TableHead>
-                  <TableHead className="w-[250px]">Permissions</TableHead>
+                  <TableHead className="text-center">Users</TableHead>
+                  <TableHead>Modules</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={5} className="h-32 text-center text-muted-foreground">
+                    <TableCell colSpan={6} className="h-32 text-center text-muted-foreground">
                       <div className="flex flex-col items-center justify-center gap-2">
                         <RiSettingsLine className="size-8 animate-spin text-primary" />
                         <span>Loading security roles...</span>
@@ -222,7 +296,7 @@ export default function RolesPage() {
                   </TableRow>
                 ) : filteredRoles.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={5} className="h-32 text-center text-muted-foreground">
+                    <TableCell colSpan={6} className="h-32 text-center text-muted-foreground">
                       No roles found.
                     </TableCell>
                   </TableRow>
@@ -252,19 +326,25 @@ export default function RolesPage() {
                           )}
                         </div>
                       </TableCell>
-                      <TableCell>
-                        <div className="flex flex-wrap gap-1">
-                          {role.permissions.length === 0 ? (
-                            <span className="text-xs text-muted-foreground">None</span>
-                          ) : (
-                            role.permissions.map((p) => (
-                              <Badge key={p.id} variant="outline" className="text-[10px] py-0 px-1.5 flex items-center gap-0.5">
-                                <RiShieldKeyholeLine className="size-3 text-muted-foreground" />
-                                {p.name}
-                              </Badge>
-                            ))
-                          )}
-                        </div>
+                      <TableCell className="text-right">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" className="size-8 p-0">
+                              <span className="sr-only">Open Menu</span>
+                              <RiMore2Fill className="size-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-35">
+                            <DropdownMenuItem onClick={() => openEditDialog(role)} className="cursor-pointer gap-2">
+                              <RiEditLine className="size-4 text-muted-foreground" />
+                              Edit Details
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleDeleteRole(role)} className="text-destructive cursor-pointer gap-2 focus:bg-destructive/10 focus:text-destructive">
+                              <RiDeleteBinLine className="size-4" />
+                              Delete Role
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </TableCell>
                     </TableRow>
                   ))
@@ -279,10 +359,12 @@ export default function RolesPage() {
             <DialogHeader>
               <DialogTitle className="flex items-center gap-1.5">
                 <RiShieldLine className="size-5 text-primary" />
-                Create Security Role
+                {editingRole ? "Edit Security Role" : "Create Security Role"}
               </DialogTitle>
               <DialogDescription>
-                Establish a new role and allocate functional modules & access privileges.
+                {editingRole
+                  ? "Modify structural capabilities and access bindings for this security role."
+                  : "Establish a new role and allocate functional modules & access privileges."}
               </DialogDescription>
             </DialogHeader>
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 py-2">
@@ -310,95 +392,90 @@ export default function RolesPage() {
                   placeholder="e.g. Full system operations and access controls"
                   {...register("description")}
                 />
-              </div>
+              </div>              <div className="space-y-3">
+                <Label className="text-sm font-semibold flex items-center gap-1.5">
+                  <RiShieldKeyholeLine className="size-4 text-primary" />
+                  Access Control (Modules & Permissions)
+                </Label>
+                <div className="border rounded-lg p-3 bg-muted/20 space-y-3 max-h-[300px] overflow-y-auto">
+                  {modules.length === 0 && permissions.length === 0 ? (
+                    <p className="text-xs text-muted-foreground text-center py-4">No modules or permissions found</p>
+                  ) : (
+                    <Controller
+                      name="roleModulePermissions"
+                      control={control}
+                      render={({ field }) => {
+                        const value = field.value || [];
 
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label className="text-sm font-semibold flex items-center gap-1">
-                    <RiCpuLine className="size-4 text-muted-foreground" />
-                    Link Modules
-                  </Label>
-                  <div className="border rounded-lg p-3 h-[180px] overflow-y-auto bg-muted/20 space-y-2">
-                    {modules.length === 0 ? (
-                      <p className="text-xs text-muted-foreground text-center py-4">No modules found</p>
-                    ) : (
-                      <Controller
-                        name="moduleIds"
-                        control={control}
-                        render={({ field }) => {
-                          const selected = field.value || [];
-                          return (
-                            <div className="space-y-2">
-                              {modules.map((m) => {
-                                const isChecked = selected.includes(m.id);
-                                return (
-                                  <label key={m.id} className="flex items-center gap-2 p-1 hover:bg-muted/50 rounded cursor-pointer text-xs font-medium">
-                                    <input
-                                      type="checkbox"
-                                      checked={isChecked}
-                                      onChange={() => {
-                                        if (isChecked) {
-                                          field.onChange(selected.filter((id) => id !== m.id));
+                        return (
+                          <div className="space-y-3">
+                            {modules.map((m) => {
+                              const selectedForThisModule = value.filter((item: any) => item.moduleId === m.id);
+                              const isModuleAllChecked = permissions.length > 0 && selectedForThisModule.length === permissions.length;
+
+                              return (
+                                <div key={m.id} className="border rounded-lg p-3 bg-background/50 space-y-2">
+                                  <label className="flex items-center gap-2 font-bold text-xs text-foreground cursor-pointer">
+                                    <Checkbox
+                                      checked={isModuleAllChecked}
+                                      onCheckedChange={(checked) => {
+                                        if (checked) {
+                                          const otherModules = value.filter((item: any) => item.moduleId !== m.id);
+                                          const newItems = permissions.map((p) => ({
+                                            moduleId: m.id,
+                                            permissionId: p.id,
+                                          }));
+                                          field.onChange([...otherModules, ...newItems]);
                                         } else {
-                                          field.onChange([...selected, m.id]);
+                                          field.onChange(value.filter((item: any) => item.moduleId !== m.id));
                                         }
                                       }}
-                                      className="rounded border-border text-primary size-4"
                                     />
-                                    <span>{m.name}</span>
+                                    <span>{m.name} Module</span>
                                   </label>
-                                );
-                              })}
-                            </div>
-                          );
-                        }}
-                      />
-                    )}
-                  </div>
-                </div>
 
-                <div className="space-y-2">
-                  <Label className="text-sm font-semibold flex items-center gap-1">
-                    <RiShieldKeyholeLine className="size-4 text-muted-foreground" />
-                    Permissions
-                  </Label>
-                  <div className="border rounded-lg p-3 h-[180px] overflow-y-auto bg-muted/20 space-y-2">
-                    {permissions.length === 0 ? (
-                      <p className="text-xs text-muted-foreground text-center py-4">No permissions found</p>
-                    ) : (
-                      <Controller
-                        name="permissionIds"
-                        control={control}
-                        render={({ field }) => {
-                          const selected = field.value || [];
-                          return (
-                            <div className="space-y-2">
-                              {permissions.map((p) => {
-                                const isChecked = selected.includes(p.id);
-                                return (
-                                  <label key={p.id} className="flex items-center gap-2 p-1 hover:bg-muted/50 rounded cursor-pointer text-xs font-medium">
-                                    <input
-                                      type="checkbox"
-                                      checked={isChecked}
-                                      onChange={() => {
-                                        if (isChecked) {
-                                          field.onChange(selected.filter((id) => id !== p.id));
-                                        } else {
-                                          field.onChange([...selected, p.id]);
-                                        }
-                                      }}
-                                      className="rounded border-border text-primary size-4"
-                                    />
-                                    <span>{p.name}</span>
-                                  </label>
-                                );
-                              })}
-                            </div>
-                          );
-                        }}
-                      />
-                    )}
-                  </div>
+                                  {permissions.length > 0 ? (
+                                    <div className="pl-6 grid grid-cols-2 gap-2 pt-2 border-t border-border/40 mt-1.5">
+                                      {permissions.map((p) => {
+                                        const isPermChecked = value.some(
+                                          (item: any) => item.moduleId === m.id && item.permissionId === p.id
+                                        );
+                                        return (
+                                          <label
+                                            key={p.id}
+                                            className="flex items-center gap-2 p-1 rounded cursor-pointer text-xs font-medium transition-colors hover:bg-muted/60"
+                                          >
+                                            <Checkbox
+                                              checked={isPermChecked}
+                                              onCheckedChange={(checked) => {
+                                                if (checked) {
+                                                  field.onChange([...value, { moduleId: m.id, permissionId: p.id }]);
+                                                } else {
+                                                  field.onChange(
+                                                    value.filter(
+                                                      (item: any) =>
+                                                        !(item.moduleId === m.id && item.permissionId === p.id)
+                                                    )
+                                                  );
+                                                }
+                                              }}
+                                            />
+                                            <span>{p.name}</span>
+                                          </label>
+                                        );
+                                      })}
+                                    </div>
+                                  ) : (
+                                    <p className="text-[10px] text-muted-foreground pl-6 italic">No global permissions defined</p>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        );
+                      }}
+                    />
+                  )}
                 </div>
               </div>
 
@@ -412,12 +489,33 @@ export default function RolesPage() {
                   Cancel
                 </Button>
                 <Button type="submit" disabled={submitting}>
-                  {submitting ? "Saving..." : "Create Role"}
+                  {submitting ? "Saving..." : editingRole ? "Save Changes" : "Create Role"}
                 </Button>
               </DialogFooter>
             </form>
           </DialogContent>
         </Dialog>
+
+        <AlertDialog open={!!roleToDelete} onOpenChange={(open) => !open && setRoleToDelete(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This action cannot be undone. This will permanently delete the security role{" "}
+                <strong>{roleToDelete?.name}</strong> and remove all its permission mappings.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={confirmDeleteRole}
+                className="bg-destructive hover:bg-destructive/90 text-destructive-foreground"
+              >
+                Delete
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </SidebarInset>
     </SidebarProvider>
   );

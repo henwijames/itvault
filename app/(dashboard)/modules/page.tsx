@@ -12,6 +12,10 @@ import {
   RiSettingsLine,
   RiDeleteBinLine,
   RiShieldKeyholeLine,
+  RiEditLine,
+  RiMore2Fill,
+  RiCheckboxCircleLine,
+  RiCloseCircleLine,
 } from "@remixicon/react";
 
 import { createModuleSchema, type CreateModuleInput } from "@/lib/validations/modules";
@@ -19,6 +23,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Table,
   TableBody,
@@ -35,6 +40,19 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { AppSidebar } from "@/components/app-sidebar";
 import {
   SidebarInset,
@@ -48,35 +66,38 @@ import {
   BreadcrumbList,
   BreadcrumbPage,
 } from "@/components/ui/breadcrumb";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+
 
 interface Module {
   id: string;
   name: string;
   code: string;
   description: string | null;
+  status: "ACTIVE" | "INACTIVE";
   rolesCount: number;
-  permissions: {
-    id: string;
-    name: string;
-    key: string;
-    description: string | null;
-  }[];
   createdAt: string;
 }
 
-interface SystemPermission {
-  id: string;
-  name: string;
-  key: string;
-}
+
 
 export default function ModulesPage() {
   const [modules, setModules] = useState<Module[]>([]);
-  const [systemPermissions, setSystemPermissions] = useState<SystemPermission[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [editingModule, setEditingModule] = useState<Module | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [moduleToDelete, setModuleToDelete] = useState<Module | null>(null);
 
   const {
     register,
@@ -84,50 +105,97 @@ export default function ModulesPage() {
     control,
     reset,
     formState: { errors },
-  } = useForm<CreateModuleInput>({
+  } = useForm<CreateModuleInput & { status?: string }>({
     resolver: zodResolver(createModuleSchema),
     defaultValues: {
-      permissionIds: [],
+      status: "ACTIVE",
     },
   });
 
-  const fetchModulesAndPermissions = async () => {
+  const fetchModules = async () => {
     setLoading(true);
     try {
-      const [modulesRes, permissionsRes] = await Promise.all([
-        axios.get("/api/modules"),
-        axios.get("/api/permissions"),
-      ]);
+      const modulesRes = await axios.get("/api/modules");
       setModules(modulesRes.data);
-      setSystemPermissions(permissionsRes.data);
     } catch (err: any) {
       console.error(err);
-      toast.error(err.response?.data?.error || "Failed to load modules and permissions");
+      toast.error(err.response?.data?.error || "Failed to load modules data");
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchModulesAndPermissions();
+    fetchModules();
   }, []);
 
-  const onSubmit = async (data: CreateModuleInput) => {
-    setSubmitting(true);
-    const toastId = toast.loading("Creating module...");
+  useEffect(() => {
+    if (editingModule) {
+      reset({
+        name: editingModule.name,
+        code: editingModule.code,
+        description: editingModule.description || "",
+        status: editingModule.status || "ACTIVE",
+      });
+    } else {
+      reset({
+        name: "",
+        code: "",
+        description: "",
+        status: "ACTIVE",
+      });
+    }
+  }, [editingModule, isCreateOpen]);
+
+  const openCreateDialog = () => {
+    setEditingModule(null);
+    setIsCreateOpen(true);
+  };
+
+  const openEditDialog = (mod: Module) => {
+    setEditingModule(mod);
+    setIsCreateOpen(true);
+  };
+
+  const handleDeleteModule = (mod: Module) => {
+    setModuleToDelete(mod);
+  };
+
+  const confirmDeleteModule = async () => {
+    if (!moduleToDelete) return;
+    const mod = moduleToDelete;
+    setModuleToDelete(null);
+    const toastId = toast.loading("Deleting module...");
     try {
-      await axios.post("/api/modules", data);
-      toast.success("Module created successfully!", { id: toastId });
+      await axios.delete(`/api/modules/${mod.id}`);
+      toast.success("Module deleted successfully!", { id: toastId });
+      fetchModules();
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || "Failed to delete module", { id: toastId });
+    }
+  };
+
+  const onSubmit = async (data: CreateModuleInput & { status?: string }) => {
+    setSubmitting(true);
+    const toastId = toast.loading(editingModule ? "Updating module..." : "Creating module...");
+    try {
+      if (editingModule) {
+        await axios.patch(`/api/modules/${editingModule.id}`, data);
+        toast.success("Module updated successfully!", { id: toastId });
+      } else {
+        await axios.post("/api/modules", data);
+        toast.success("Module created successfully!", { id: toastId });
+      }
       setIsCreateOpen(false);
       reset({
         name: "",
         code: "",
         description: "",
-        permissionIds: [],
+        status: "ACTIVE",
       });
-      fetchModulesAndPermissions();
+      fetchModules();
     } catch (err: any) {
-      toast.error(err.response?.data?.error || "Failed to create module", { id: toastId });
+      toast.error(err.response?.data?.error || (editingModule ? "Failed to update module" : "Failed to create module"), { id: toastId });
     } finally {
       setSubmitting(false);
     }
@@ -139,6 +207,27 @@ export default function ModulesPage() {
       m.code.toLowerCase().includes(search.toLowerCase()) ||
       (m.description && m.description.toLowerCase().includes(search.toLowerCase()))
   );
+
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case "ACTIVE":
+        return (
+          <Badge variant="outline" className="text-emerald-700 bg-emerald-50 border-emerald-200 flex items-center gap-1 font-semibold text-xs py-0.5 w-fit">
+            <RiCheckboxCircleLine className="size-3 text-emerald-600" />
+            Active
+          </Badge>
+        );
+      case "INACTIVE":
+        return (
+          <Badge variant="outline" className="text-rose-700 bg-rose-50 border-rose-200 flex items-center gap-1 font-semibold text-xs py-0.5 w-fit">
+            <RiCloseCircleLine className="size-3 text-rose-600" />
+            Inactive
+          </Badge>
+        );
+      default:
+        return <Badge variant="secondary">{status}</Badge>;
+    }
+  };
 
   return (
     <SidebarProvider>
@@ -169,12 +258,12 @@ export default function ModulesPage() {
                 Manage system capability modules, binding them to access keys and user privileges.
               </p>
             </div>
-            <Button onClick={() => setIsCreateOpen(true)} className="sm:self-start">
+            <Button onClick={openCreateDialog} className="sm:self-start">
               <RiAddLine className="mr-1.5 size-4" data-icon="inline-start" />
               Add Module
             </Button>
           </div>
-
+ 
           <div className="flex items-center gap-2 max-w-sm">
             <div className="relative flex-1">
               <RiSearchLine className="absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
@@ -186,7 +275,7 @@ export default function ModulesPage() {
               />
             </div>
           </div>
-
+ 
           <div className="border rounded-xl bg-card shadow-sm overflow-hidden">
             <Table>
               <TableHeader>
@@ -194,13 +283,14 @@ export default function ModulesPage() {
                   <TableHead className="w-[180px]">Module Name</TableHead>
                   <TableHead className="w-[150px]">Code</TableHead>
                   <TableHead>Description</TableHead>
-                  <TableHead className="w-[300px]">Linked Permissions</TableHead>
+                  <TableHead className="w-[120px]">Status</TableHead>
+                  <TableHead className="w-[80px] text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={4} className="h-32 text-center text-muted-foreground">
+                    <TableCell colSpan={5} className="h-32 text-center text-muted-foreground">
                       <div className="flex flex-col items-center justify-center gap-2">
                         <RiSettingsLine className="size-8 animate-spin text-primary" />
                         <span>Loading modules...</span>
@@ -209,7 +299,7 @@ export default function ModulesPage() {
                   </TableRow>
                 ) : filteredModules.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={4} className="h-32 text-center text-muted-foreground">
+                    <TableCell colSpan={5} className="h-32 text-center text-muted-foreground">
                       No modules found.
                     </TableCell>
                   </TableRow>
@@ -228,18 +318,27 @@ export default function ModulesPage() {
                         {mod.description || "—"}
                       </TableCell>
                       <TableCell>
-                        <div className="flex flex-wrap gap-1">
-                          {mod.permissions.length === 0 ? (
-                            <span className="text-xs text-muted-foreground">None</span>
-                          ) : (
-                            mod.permissions.map((perm) => (
-                              <Badge key={perm.id} variant="outline" className="text-[10px] py-0 px-1.5 flex items-center gap-0.5 font-medium">
-                                <RiShieldKeyholeLine className="size-3 text-muted-foreground" />
-                                {perm.name}
-                              </Badge>
-                            ))
-                          )}
-                        </div>
+                        {getStatusBadge(mod.status)}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" className="size-8 p-0">
+                              <span className="sr-only">Open Menu</span>
+                              <RiMore2Fill className="size-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-[140px]">
+                            <DropdownMenuItem onClick={() => openEditDialog(mod)} className="cursor-pointer gap-2">
+                              <RiEditLine className="size-4 text-muted-foreground" />
+                              Edit Details
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleDeleteModule(mod)} className="text-destructive cursor-pointer gap-2 focus:bg-destructive/10 focus:text-destructive">
+                              <RiDeleteBinLine className="size-4" />
+                              Delete Module
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </TableCell>
                     </TableRow>
                   ))
@@ -248,16 +347,18 @@ export default function ModulesPage() {
             </Table>
           </div>
         </main>
-
+ 
         <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
           <DialogContent className="sm:max-w-[500px]">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-1.5">
                 <RiCpuLine className="size-5 text-primary" />
-                Create New Module
+                {editingModule ? "Edit Module" : "Create New Module"}
               </DialogTitle>
               <DialogDescription>
-                Define a capability block of the IT Vault system and map permissions under it.
+                {editingModule
+                  ? "Update capability block details."
+                  : "Define a capability block of the IT Vault system."}
               </DialogDescription>
             </DialogHeader>
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 py-2">
@@ -276,7 +377,7 @@ export default function ModulesPage() {
                     <p className="text-xs text-destructive font-medium">{errors.name.message}</p>
                   )}
                 </div>
-
+ 
                 <div className="space-y-1.5">
                   <Label htmlFor="code" className="text-sm font-semibold">
                     Code (Unique Identifier)
@@ -292,7 +393,7 @@ export default function ModulesPage() {
                   )}
                 </div>
               </div>
-
+ 
               <div className="space-y-1.5">
                 <Label htmlFor="description" className="text-sm font-semibold">
                   Description (Optional)
@@ -304,56 +405,33 @@ export default function ModulesPage() {
                 />
               </div>
 
-              <div className="space-y-2">
-                <Label className="text-sm font-semibold">
-                  Associate Permissions
-                </Label>
-                <div className="border rounded-lg p-3 max-h-[160px] overflow-y-auto bg-muted/20 space-y-2">
-                  {systemPermissions.length === 0 ? (
-                    <p className="text-xs text-muted-foreground text-center py-2">
-                      No permissions available to link. Create one first!
-                    </p>
-                  ) : (
-                    <Controller
-                      name="permissionIds"
-                      control={control}
-                      render={({ field }) => {
-                        const selectedValues = field.value || [];
-                        return (
-                          <div className="grid grid-cols-1 gap-2">
-                            {systemPermissions.map((perm) => {
-                              const isChecked = selectedValues.includes(perm.id);
-                              return (
-                                <label
-                                  key={perm.id}
-                                  className="flex items-center gap-2 p-1.5 hover:bg-muted/50 rounded cursor-pointer transition-colors text-xs font-medium"
-                                >
-                                  <input
-                                    type="checkbox"
-                                    checked={isChecked}
-                                    onChange={() => {
-                                      if (isChecked) {
-                                        field.onChange(selectedValues.filter((id) => id !== perm.id));
-                                      } else {
-                                        field.onChange([...selectedValues, perm.id]);
-                                      }
-                                    }}
-                                    className="rounded border-border text-primary focus:ring-primary size-4"
-                                  />
-                                  <span>
-                                    {perm.name} <code className="text-[10px] text-muted-foreground">({perm.key})</code>
-                                  </span>
-                                </label>
-                              );
-                            })}
-                          </div>
-                        );
-                      }}
-                    />
-                  )}
+              {editingModule && (
+                <div className="space-y-1.5">
+                  <Label htmlFor="status" className="text-sm font-semibold">
+                    Status
+                  </Label>
+                  <Controller
+                    name="status"
+                    control={control}
+                    render={({ field }) => (
+                      <Select
+                        onValueChange={field.onChange}
+                        defaultValue={field.value}
+                        value={field.value}
+                      >
+                        <SelectTrigger className="w-full h-10 border border-input bg-background font-medium text-sm rounded-md px-3">
+                          <SelectValue placeholder="Select Status" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="ACTIVE">Active</SelectItem>
+                          <SelectItem value="INACTIVE">Inactive</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    )}
+                  />
                 </div>
-              </div>
-
+              )}
+ 
               <DialogFooter className="pt-4">
                 <Button
                   type="button"
@@ -364,12 +442,33 @@ export default function ModulesPage() {
                   Cancel
                 </Button>
                 <Button type="submit" disabled={submitting}>
-                  {submitting ? "Saving..." : "Create Module"}
+                  {submitting ? "Saving..." : editingModule ? "Save Changes" : "Create Module"}
                 </Button>
               </DialogFooter>
             </form>
           </DialogContent>
         </Dialog>
+
+        <AlertDialog open={!!moduleToDelete} onOpenChange={(open) => !open && setModuleToDelete(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This action cannot be undone. This will permanently delete the module{" "}
+                <strong>{moduleToDelete?.name}</strong> and remove all its role bindings.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={confirmDeleteModule}
+                className="bg-destructive hover:bg-destructive/90 text-destructive-foreground"
+              >
+                Delete
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </SidebarInset>
     </SidebarProvider>
   );

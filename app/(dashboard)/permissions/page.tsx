@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import axios from "axios";
 import { toast } from "sonner";
@@ -12,6 +12,10 @@ import {
   RiSettingsLine,
   RiEyeLine,
   RiDeleteBinLine,
+  RiEditLine,
+  RiMore2Fill,
+  RiCheckboxCircleLine,
+  RiCloseCircleLine,
 } from "@remixicon/react";
 
 import { createPermissionSchema, type CreatePermissionInput } from "@/lib/validations/permissions";
@@ -35,6 +39,19 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { AppSidebar } from "@/components/app-sidebar";
 import {
   SidebarInset,
@@ -48,13 +65,24 @@ import {
   BreadcrumbList,
   BreadcrumbPage,
 } from "@/components/ui/breadcrumb";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+
 
 interface Permission {
   id: string;
   name: string;
   key: string;
   description: string | null;
-  module_id: string | null;
+  status: "ACTIVE" | "INACTIVE";
   created_at: string;
 }
 
@@ -63,27 +91,38 @@ export default function PermissionsPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [editingPermission, setEditingPermission] = useState<Permission | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [permissionToDelete, setPermissionToDelete] = useState<Permission | null>(null);
 
   const {
     register,
     handleSubmit,
+    control,
     reset,
     formState: { errors },
-  } = useForm<CreatePermissionInput>({
+  } = useForm<CreatePermissionInput & { status?: string }>({
     resolver: zodResolver(createPermissionSchema),
+    defaultValues: {
+      name: "",
+      key: "",
+      description: "",
+      status: "ACTIVE",
+    },
   });
 
-  const fetchPermissions = async () => {
+  const fetchData = async () => {
     setLoading(true);
     try {
-      const response = await axios.get("/api/permissions");
-      // Check if response data is an array or has permission list
-      if (Array.isArray(response.data)) {
-        setPermissions(response.data);
-      } else if (response.data && Array.isArray(response.data.permissions)) {
-        setPermissions(response.data.permissions);
+      const permissionsRes = await axios.get("/api/permissions");
+      
+      let permsData = [];
+      if (Array.isArray(permissionsRes.data)) {
+        permsData = permissionsRes.data;
+      } else if (permissionsRes.data && Array.isArray(permissionsRes.data.permissions)) {
+        permsData = permissionsRes.data.permissions;
       }
+      setPermissions(permsData);
     } catch (err: any) {
       console.error(err);
       toast.error(err.response?.data?.error || "Failed to load permissions");
@@ -93,20 +132,71 @@ export default function PermissionsPage() {
   };
 
   useEffect(() => {
-    fetchPermissions();
+    fetchData();
   }, []);
 
-  const onSubmit = async (data: CreatePermissionInput) => {
-    setSubmitting(true);
-    const toastId = toast.loading("Creating permission...");
+  useEffect(() => {
+    if (editingPermission) {
+      reset({
+        name: editingPermission.name,
+        key: editingPermission.key,
+        description: editingPermission.description || "",
+        status: editingPermission.status || "ACTIVE",
+      });
+    } else {
+      reset({
+        name: "",
+        key: "",
+        description: "",
+        status: "ACTIVE",
+      });
+    }
+  }, [editingPermission, isCreateOpen]);
+
+  const openCreateDialog = () => {
+    setEditingPermission(null);
+    setIsCreateOpen(true);
+  };
+
+  const openEditDialog = (perm: Permission) => {
+    setEditingPermission(perm);
+    setIsCreateOpen(true);
+  };
+
+  const handleDeletePermission = (perm: Permission) => {
+    setPermissionToDelete(perm);
+  };
+
+  const confirmDeletePermission = async () => {
+    if (!permissionToDelete) return;
+    const perm = permissionToDelete;
+    setPermissionToDelete(null);
+    const toastId = toast.loading("Deleting permission...");
     try {
-      await axios.post("/api/permissions", data);
-      toast.success("Permission created successfully!", { id: toastId });
+      await axios.delete(`/api/permissions/${perm.id}`);
+      toast.success("Permission deleted successfully!", { id: toastId });
+      fetchData();
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || "Failed to delete permission", { id: toastId });
+    }
+  };
+
+  const onSubmit = async (data: CreatePermissionInput & { status?: string }) => {
+    setSubmitting(true);
+    const toastId = toast.loading(editingPermission ? "Updating permission..." : "Creating permission...");
+    try {
+      if (editingPermission) {
+        await axios.patch(`/api/permissions/${editingPermission.id}`, data);
+        toast.success("Permission updated successfully!", { id: toastId });
+      } else {
+        await axios.post("/api/permissions", data);
+        toast.success("Permission created successfully!", { id: toastId });
+      }
       setIsCreateOpen(false);
       reset();
-      fetchPermissions();
+      fetchData();
     } catch (err: any) {
-      toast.error(err.response?.data?.error || "Failed to create permission", { id: toastId });
+      toast.error(err.response?.data?.error || (editingPermission ? "Failed to update permission" : "Failed to create permission"), { id: toastId });
     } finally {
       setSubmitting(false);
     }
@@ -118,6 +208,27 @@ export default function PermissionsPage() {
       p.key.toLowerCase().includes(search.toLowerCase()) ||
       (p.description && p.description.toLowerCase().includes(search.toLowerCase()))
   );
+
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case "ACTIVE":
+        return (
+          <Badge variant="outline" className="text-emerald-700 bg-emerald-50 border-emerald-200 flex items-center gap-1 font-semibold text-xs py-0.5 w-fit">
+            <RiCheckboxCircleLine className="size-3 text-emerald-600" />
+            Active
+          </Badge>
+        );
+      case "INACTIVE":
+        return (
+          <Badge variant="outline" className="text-rose-700 bg-rose-50 border-rose-200 flex items-center gap-1 font-semibold text-xs py-0.5 w-fit">
+            <RiCloseCircleLine className="size-3 text-rose-600" />
+            Inactive
+          </Badge>
+        );
+      default:
+        return <Badge variant="secondary">{status}</Badge>;
+    }
+  };
 
   return (
     <SidebarProvider>
@@ -148,7 +259,7 @@ export default function PermissionsPage() {
                 Manage system-wide permissions used to enforce functional RBAC security.
               </p>
             </div>
-            <Button onClick={() => setIsCreateOpen(true)} className="sm:self-start">
+            <Button onClick={openCreateDialog} className="sm:self-start">
               <RiAddLine className="mr-1.5 size-4" data-icon="inline-start" />
               Add Permission
             </Button>
@@ -171,15 +282,17 @@ export default function PermissionsPage() {
               <TableHeader>
                 <TableRow className="bg-muted/40">
                   <TableHead className="w-[200px]">Name</TableHead>
-                  <TableHead className="w-[250px]">System Key</TableHead>
+                  <TableHead className="w-[200px]">System Key</TableHead>
                   <TableHead>Description</TableHead>
-                  <TableHead className="w-[120px]">Type</TableHead>
+                  <TableHead className="w-[100px]">Status</TableHead>
+                  <TableHead className="w-[100px]">Type</TableHead>
+                  <TableHead className="w-[80px] text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={4} className="h-32 text-center text-muted-foreground">
+                    <TableCell colSpan={6} className="h-32 text-center text-muted-foreground">
                       <div className="flex flex-col items-center justify-center gap-2">
                         <RiSettingsLine className="size-8 animate-spin text-primary" />
                         <span>Loading permissions...</span>
@@ -188,7 +301,7 @@ export default function PermissionsPage() {
                   </TableRow>
                 ) : filteredPermissions.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={4} className="h-32 text-center text-muted-foreground">
+                    <TableCell colSpan={6} className="h-32 text-center text-muted-foreground">
                       No permissions found.
                     </TableCell>
                   </TableRow>
@@ -207,9 +320,32 @@ export default function PermissionsPage() {
                         {permission.description || "—"}
                       </TableCell>
                       <TableCell>
+                        {getStatusBadge(permission.status)}
+                      </TableCell>
+                      <TableCell>
                         <Badge variant="outline" className="capitalize text-xs font-semibold">
                           System
                         </Badge>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" className="size-8 p-0">
+                              <span className="sr-only">Open Menu</span>
+                              <RiMore2Fill className="size-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-[140px]">
+                            <DropdownMenuItem onClick={() => openEditDialog(permission)} className="cursor-pointer gap-2">
+                              <RiEditLine className="size-4 text-muted-foreground" />
+                              Edit Details
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleDeletePermission(permission)} className="text-destructive cursor-pointer gap-2 focus:bg-destructive/10 focus:text-destructive">
+                              <RiDeleteBinLine className="size-4" />
+                              Delete Perm
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </TableCell>
                     </TableRow>
                   ))
@@ -224,10 +360,12 @@ export default function PermissionsPage() {
             <DialogHeader>
               <DialogTitle className="flex items-center gap-1.5">
                 <RiShieldKeyholeLine className="size-5 text-primary" />
-                Create New Permission
+                {editingPermission ? "Edit Permission" : "Create New Permission"}
               </DialogTitle>
               <DialogDescription>
-                Define a new permission key to secure system endpoints and UI menus.
+                {editingPermission
+                  ? "Update permission details and secure system access rules."
+                  : "Define a new permission key to secure system endpoints and UI menus."}
               </DialogDescription>
             </DialogHeader>
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 py-4">
@@ -247,21 +385,6 @@ export default function PermissionsPage() {
               </div>
 
               <div className="space-y-1.5">
-                <Label htmlFor="key" className="text-sm font-semibold">
-                  System Key (Unique)
-                </Label>
-                <Input
-                  id="key"
-                  placeholder="e.g. documents:view"
-                  {...register("key")}
-                  aria-invalid={!!errors.key}
-                />
-                {errors.key && (
-                  <p className="text-xs text-destructive font-medium">{errors.key.message}</p>
-                )}
-              </div>
-
-              <div className="space-y-1.5">
                 <Label htmlFor="description" className="text-sm font-semibold">
                   Description (Optional)
                 </Label>
@@ -271,6 +394,33 @@ export default function PermissionsPage() {
                   {...register("description")}
                 />
               </div>
+
+              {editingPermission && (
+                <div className="space-y-1.5">
+                  <Label htmlFor="status" className="text-sm font-semibold">
+                    Status
+                  </Label>
+                  <Controller
+                    name="status"
+                    control={control}
+                    render={({ field }) => (
+                      <Select
+                        onValueChange={field.onChange}
+                        defaultValue={field.value}
+                        value={field.value}
+                      >
+                        <SelectTrigger className="w-full h-10 border border-input bg-background font-medium text-sm rounded-md px-3">
+                          <SelectValue placeholder="Select Status" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="ACTIVE">Active</SelectItem>
+                          <SelectItem value="INACTIVE">Inactive</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    )}
+                  />
+                </div>
+              )}
 
               <DialogFooter className="pt-4">
                 <Button
@@ -282,12 +432,33 @@ export default function PermissionsPage() {
                   Cancel
                 </Button>
                 <Button type="submit" disabled={submitting}>
-                  {submitting ? "Saving..." : "Create Permission"}
+                  {submitting ? "Saving..." : editingPermission ? "Save Changes" : "Create Permission"}
                 </Button>
               </DialogFooter>
             </form>
           </DialogContent>
         </Dialog>
+
+        <AlertDialog open={!!permissionToDelete} onOpenChange={(open) => !open && setPermissionToDelete(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This action cannot be undone. This will permanently delete the permission{" "}
+                <strong>{permissionToDelete?.name}</strong> (<code>{permissionToDelete?.key}</code>) and remove all its role bindings.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={confirmDeletePermission}
+                className="bg-destructive hover:bg-destructive/90 text-destructive-foreground"
+              >
+                Delete
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </SidebarInset>
     </SidebarProvider>
   );

@@ -53,6 +53,18 @@ enum account_type {
   ACCOMMODATION
 }
 
+enum permission_status {
+  ACTIVE
+  INACTIVE
+  DELETED
+}
+
+enum module_status {
+  ACTIVE
+  INACTIVE
+  DELETED
+}
+
 //
 // USERS (LOGIN)
 //
@@ -96,6 +108,7 @@ model roles {
   users       user_roles[]
   permissions role_permissions[]
   modules     role_modules[]
+  role_module_permissions role_module_permissions[]
 
   @@map("roles")
 }
@@ -105,12 +118,13 @@ model modules {
   name        String   @unique
   code        String   @unique
   description String?
+  status      module_status @default(ACTIVE)
 
   created_at  DateTime @default(now())
   updated_at  DateTime @updatedAt
 
-  permissions permissions[]
   roles       role_modules[]
+  role_module_permissions role_module_permissions[]
 
   @@map("modules")
 }
@@ -121,14 +135,13 @@ model permissions {
   name        String  @unique
   key         String  @unique
   description String?
-
-  module_id   String?
-  module      modules? @relation(fields: [module_id], references: [id], onDelete: SetNull)
+  status      permission_status @default(ACTIVE)
 
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
 
   roles role_permissions[]
+  role_module_permissions role_module_permissions[]
 
   @@map("permissions")
 }
@@ -164,6 +177,19 @@ model role_modules {
 
   @@id([role_id, module_id])
   @@map("role_modules")
+}
+
+model role_module_permissions {
+  role_id       String
+  module_id     String
+  permission_id String
+
+  role       roles       @relation(fields: [role_id], references: [id], onDelete: Cascade)
+  module     modules     @relation(fields: [module_id], references: [id], onDelete: Cascade)
+  permission permissions @relation(fields: [permission_id], references: [id], onDelete: Cascade)
+
+  @@id([role_id, module_id, permission_id])
+  @@map("role_module_permissions")
 }
 
 //

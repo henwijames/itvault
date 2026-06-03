@@ -10,10 +10,9 @@ type RouteParams = {
 export async function GET(request: NextRequest, { params }: RouteParams) {
   try {
     const { id } = await params;
-    const mod = await prisma.modules.findUnique({
-      where: { id },
+    const mod = await prisma.modules.findFirst({
+      where: { id, status: { not: "DELETED" } },
       include: {
-        permissions: true,
         _count: {
           select: {
             roles: true,
@@ -34,12 +33,6 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       createdAt: mod.created_at,
       updatedAt: mod.updated_at,
       rolesCount: mod._count.roles,
-      permissions: mod.permissions.map((perm) => ({
-        id: perm.id,
-        name: perm.name,
-        key: perm.key,
-        description: perm.description,
-      })),
     };
 
     return NextResponse.json(formattedModule, { status: 200 });
@@ -65,11 +58,11 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       );
     }
 
-    const { name, code, description, permissionIds } = result.data;
+    const { name, code, description, status } = result.data;
 
     // Check if module exists
-    const existingMod = await prisma.modules.findUnique({
-      where: { id },
+    const existingMod = await prisma.modules.findFirst({
+      where: { id, status: { not: "DELETED" } },
     });
     if (!existingMod) {
       return NextResponse.json({ error: "Module not found" }, { status: 404 });
@@ -77,8 +70,8 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 
     // Name uniqueness check if changing
     if (name && name.trim() !== existingMod.name) {
-      const nameConflict = await prisma.modules.findUnique({
-        where: { name: name.trim() },
+      const nameConflict = await prisma.modules.findFirst({
+        where: { name: name.trim(), status: { not: "DELETED" } },
       });
       if (nameConflict) {
         return NextResponse.json(
@@ -90,8 +83,8 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 
     // Code uniqueness check if changing
     if (code && code.trim().toLowerCase() !== existingMod.code) {
-      const codeConflict = await prisma.modules.findUnique({
-        where: { code: code.trim().toLowerCase() },
+      const codeConflict = await prisma.modules.findFirst({
+        where: { code: code.trim().toLowerCase(), status: { not: "DELETED" } },
       });
       if (codeConflict) {
         return NextResponse.json(
@@ -108,39 +101,12 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
           name: name ? name.trim() : undefined,
           code: code ? code.trim().toLowerCase() : undefined,
           description: description !== undefined ? (description ? description.trim() : null) : undefined,
+          status: status || undefined,
         },
       });
 
-      if (Array.isArray(permissionIds)) {
-        // Disassociate permissions no longer linked to this module
-        await tx.permissions.updateMany({
-          where: {
-            module_id: id,
-            id: { notIn: permissionIds },
-          },
-          data: {
-            module_id: null,
-          },
-        });
-
-        // Associate new permissions with this module
-        if (permissionIds.length > 0) {
-          await tx.permissions.updateMany({
-            where: {
-              id: { in: permissionIds },
-            },
-            data: {
-              module_id: id,
-            },
-          });
-        }
-      }
-
       return tx.modules.findUnique({
         where: { id },
-        include: {
-          permissions: true,
-        },
       });
     });
 
@@ -155,12 +121,6 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       description: updatedModule.description,
       createdAt: updatedModule.created_at,
       updatedAt: updatedModule.updated_at,
-      permissions: updatedModule.permissions.map((perm) => ({
-        id: perm.id,
-        name: perm.name,
-        key: perm.key,
-        description: perm.description,
-      })),
     };
 
     return NextResponse.json(formattedModule, { status: 200 });
@@ -177,15 +137,24 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
   try {
     const { id } = await params;
 
-    const existingMod = await prisma.modules.findUnique({
-      where: { id },
+    const existingMod = await prisma.modules.findFirst({
+      where: { id, status: { not: "DELETED" } },
     });
     if (!existingMod) {
       return NextResponse.json({ error: "Module not found" }, { status: 404 });
     }
 
-    await prisma.modules.delete({
-      where: { id },
+    const timestamp = Date.now();
+    await prisma.$transaction(async (tx) => {
+      // Soft-delete the module and append a suffix to release name/code constraints
+      await tx.modules.update({
+        where: { id },
+        data: {
+          status: "DELETED",
+          name: `${existingMod.name}_deleted_${timestamp}`,
+          code: `${existingMod.code}_deleted_${timestamp}`
+        },
+      });
     });
 
     return NextResponse.json({ message: "Module deleted successfully" }, { status: 200 });

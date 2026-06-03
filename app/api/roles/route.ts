@@ -7,14 +7,10 @@ export async function GET(request: NextRequest) {
   try {
     const roles = await prisma.roles.findMany({
       include: {
-        permissions: {
-          include: {
-            permission: true,
-          },
-        },
-        modules: {
+        role_module_permissions: {
           include: {
             module: true,
+            permission: true,
           },
         },
         _count: {
@@ -36,18 +32,32 @@ export async function GET(request: NextRequest) {
       createdAt: role.created_at,
       updatedAt: role.updated_at,
       userCount: role._count.users,
-      permissions: role.permissions.map((rp) => ({
-        id: rp.permission.id,
-        name: rp.permission.name,
-        key: rp.permission.key,
-        description: rp.permission.description,
+      roleModulePermissions: role.role_module_permissions.map((rmp) => ({
+        moduleId: rmp.module_id,
+        moduleName: rmp.module.name,
+        moduleCode: rmp.module.code,
+        permissionId: rmp.permission_id,
+        permissionName: rmp.permission.name,
+        permissionKey: rmp.permission.key,
       })),
-      modules: role.modules.map((rm) => ({
-        id: rm.module.id,
-        name: rm.module.name,
-        code: rm.module.code,
-        description: rm.module.description,
+      // Keep fallback properties to avoid breaking other client code if any
+      permissions: role.role_module_permissions.map((rmp) => ({
+        id: rmp.permission.id,
+        name: rmp.permission.name,
+        key: rmp.permission.key,
       })),
+      modules: Array.from(
+        new Map(
+          role.role_module_permissions.map((rmp) => [
+            rmp.module.id,
+            {
+              id: rmp.module.id,
+              name: rmp.module.name,
+              code: rmp.module.code,
+            },
+          ])
+        ).values()
+      ),
     }));
 
     return NextResponse.json(formattedRoles);
@@ -72,7 +82,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { name, description, permissionIds, moduleIds } = result.data;
+    const { name, description, roleModulePermissions } = result.data;
+    console.log("POST /api/roles - request payload:", { name, description, roleModulePermissions });
 
     // Check if role name already exists
     const existingRole = await prisma.roles.findUnique({
@@ -95,22 +106,16 @@ export async function POST(request: NextRequest) {
         },
       });
 
-      if (Array.isArray(permissionIds) && permissionIds.length > 0) {
-        // Create the role_permissions mapping
-        await tx.role_permissions.createMany({
-          data: permissionIds.map((permId: string) => ({
-            role_id: role.id,
-            permission_id: permId,
-          })),
-        });
-      }
+      console.log("Created role record ID:", role.id);
 
-      if (Array.isArray(moduleIds) && moduleIds.length > 0) {
-        // Create the role_modules mapping
-        await tx.role_modules.createMany({
-          data: moduleIds.map((modId: string) => ({
+      if (Array.isArray(roleModulePermissions) && roleModulePermissions.length > 0) {
+        console.log("Inserting role module permissions:", roleModulePermissions);
+        // Create the role_module_permissions mapping
+        await tx.role_module_permissions.createMany({
+          data: roleModulePermissions.map((rmp) => ({
             role_id: role.id,
-            module_id: modId,
+            module_id: rmp.moduleId,
+            permission_id: rmp.permissionId,
           })),
         });
       }
@@ -118,14 +123,10 @@ export async function POST(request: NextRequest) {
       return tx.roles.findUnique({
         where: { id: role.id },
         include: {
-          permissions: {
-            include: {
-              permission: true,
-            },
-          },
-          modules: {
+          role_module_permissions: {
             include: {
               module: true,
+              permission: true,
             },
           },
           _count: {
@@ -148,18 +149,31 @@ export async function POST(request: NextRequest) {
       createdAt: newRole.created_at,
       updatedAt: newRole.updated_at,
       userCount: newRole._count.users,
-      permissions: newRole.permissions.map((rp) => ({
-        id: rp.permission.id,
-        name: rp.permission.name,
-        key: rp.permission.key,
-        description: rp.permission.description,
+      roleModulePermissions: newRole.role_module_permissions.map((rmp) => ({
+        moduleId: rmp.module_id,
+        moduleName: rmp.module.name,
+        moduleCode: rmp.module.code,
+        permissionId: rmp.permission_id,
+        permissionName: rmp.permission.name,
+        permissionKey: rmp.permission.key,
       })),
-      modules: newRole.modules.map((rm) => ({
-        id: rm.module.id,
-        name: rm.module.name,
-        code: rm.module.code,
-        description: rm.module.description,
+      permissions: newRole.role_module_permissions.map((rmp) => ({
+        id: rmp.permission.id,
+        name: rmp.permission.name,
+        key: rmp.permission.key,
       })),
+      modules: Array.from(
+        new Map(
+          newRole.role_module_permissions.map((rmp) => [
+            rmp.module.id,
+            {
+              id: rmp.module.id,
+              name: rmp.module.name,
+              code: rmp.module.code,
+            },
+          ])
+        ).values()
+      ),
     };
 
     return NextResponse.json(formattedRole, { status: 201 });

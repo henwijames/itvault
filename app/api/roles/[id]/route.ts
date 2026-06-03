@@ -12,8 +12,9 @@ export async function GET(
     const role = await prisma.roles.findUnique({
       where: { id },
       include: {
-        permissions: {
+        role_module_permissions: {
           include: {
+            module: true,
             permission: true,
           },
         },
@@ -39,12 +40,31 @@ export async function GET(
       createdAt: role.created_at,
       updatedAt: role.updated_at,
       userCount: role._count.users,
-      permissions: role.permissions.map((rp) => ({
-        id: rp.permission.id,
-        name: rp.permission.name,
-        key: rp.permission.key,
-        description: rp.permission.description,
+      roleModulePermissions: role.role_module_permissions.map((rmp) => ({
+        moduleId: rmp.module_id,
+        moduleName: rmp.module.name,
+        moduleCode: rmp.module.code,
+        permissionId: rmp.permission_id,
+        permissionName: rmp.permission.name,
+        permissionKey: rmp.permission.key,
       })),
+      permissions: role.role_module_permissions.map((rmp) => ({
+        id: rmp.permission.id,
+        name: rmp.permission.name,
+        key: rmp.permission.key,
+      })),
+      modules: Array.from(
+        new Map(
+          role.role_module_permissions.map((rmp) => [
+            rmp.module.id,
+            {
+              id: rmp.module.id,
+              name: rmp.module.name,
+              code: rmp.module.code,
+            },
+          ])
+        ).values()
+      ),
     };
 
     return NextResponse.json(formattedRole);
@@ -73,7 +93,7 @@ export async function PUT(
       );
     }
 
-    const { name, description, permissionIds } = result.data;
+    const { name, description, roleModulePermissions } = result.data;
 
     // Check if role exists
     const roleExists = await prisma.roles.findUnique({
@@ -111,7 +131,7 @@ export async function PUT(
       }
     }
 
-    // Update inside a transaction to synchronize permissions
+    // Update inside a transaction to synchronize permissions and modules
     const updatedRole = await prisma.$transaction(async (tx) => {
       // Update role attributes
       const role = await tx.roles.update({
@@ -122,29 +142,31 @@ export async function PUT(
         },
       });
 
-      // Synchronize permissions if permissionIds is provided
-      if (Array.isArray(permissionIds)) {
+      // Synchronize role_module_permissions if roleModulePermissions is provided
+      if (Array.isArray(roleModulePermissions)) {
         // Delete all current permission mappings for this role
-        await tx.role_permissions.deleteMany({
+        await tx.role_module_permissions.deleteMany({
           where: { role_id: id },
         });
 
         // Insert new ones if any
-        if (permissionIds.length > 0) {
-          await tx.role_permissions.createMany({
-            data: permissionIds.map((permId: string) => ({
+        if (roleModulePermissions.length > 0) {
+          await tx.role_module_permissions.createMany({
+            data: roleModulePermissions.map((rmp) => ({
               role_id: id,
-              permission_id: permId,
+              module_id: rmp.moduleId,
+              permission_id: rmp.permissionId,
             })),
           });
         }
       }
 
       return tx.roles.findUnique({
-        where: { id },
+        where: { id: role.id },
         include: {
-          permissions: {
+          role_module_permissions: {
             include: {
+              module: true,
               permission: true,
             },
           },
@@ -168,12 +190,31 @@ export async function PUT(
       createdAt: updatedRole.created_at,
       updatedAt: updatedRole.updated_at,
       userCount: updatedRole._count.users,
-      permissions: updatedRole.permissions.map((rp) => ({
-        id: rp.permission.id,
-        name: rp.permission.name,
-        key: rp.permission.key,
-        description: rp.permission.description,
+      roleModulePermissions: updatedRole.role_module_permissions.map((rmp) => ({
+        moduleId: rmp.module_id,
+        moduleName: rmp.module.name,
+        moduleCode: rmp.module.code,
+        permissionId: rmp.permission_id,
+        permissionName: rmp.permission.name,
+        permissionKey: rmp.permission.key,
       })),
+      permissions: updatedRole.role_module_permissions.map((rmp) => ({
+        id: rmp.permission.id,
+        name: rmp.permission.name,
+        key: rmp.permission.key,
+      })),
+      modules: Array.from(
+        new Map(
+          updatedRole.role_module_permissions.map((rmp) => [
+            rmp.module.id,
+            {
+              id: rmp.module.id,
+              name: rmp.module.name,
+              code: rmp.module.code,
+            },
+          ])
+        ).values()
+      ),
     };
 
     return NextResponse.json(formattedRole);
