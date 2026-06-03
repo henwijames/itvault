@@ -20,9 +20,11 @@ import {
 } from "@remixicon/react";
 
 import { createUserSchema, updateUserSchema, type CreateUserInput, type UpdateUserInput } from "@/lib/validations/users";
+import { useAuth } from "@/components/auth-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -100,7 +102,9 @@ interface AvailableRole {
 }
 
 export default function UsersPage() {
+  const { hasPermission, refreshUser } = useAuth();
   const [users, setUsers] = useState<User[]>([]);
+
   const [availableRoles, setAvailableRoles] = useState<AvailableRole[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -133,7 +137,7 @@ export default function UsersPage() {
     try {
       const [usersRes, rolesRes] = await Promise.all([
         axios.get("/api/users"),
-        axios.get("/api/roles"),
+        hasPermission("roles", "view") ? axios.get("/api/roles") : Promise.resolve({ data: [] }),
       ]);
       setUsers(usersRes.data);
       setAvailableRoles(rolesRes.data);
@@ -195,7 +199,8 @@ export default function UsersPage() {
         toast.success("User created successfully!", { id: toastId });
       }
       setIsDialogOpen(false);
-      fetchData();
+      await fetchData();
+      await refreshUser();
     } catch (err: any) {
       toast.error(err.response?.data?.error || "An error occurred", { id: toastId });
     } finally {
@@ -284,11 +289,14 @@ export default function UsersPage() {
                 Manage your organization users, statuses, and role privileges.
               </p>
             </div>
-            <Button onClick={openCreateDialog} className="sm:self-start">
-              <RiAddLine className="mr-1.5 size-4" data-icon="inline-start" />
-              Add User
-            </Button>
+            {hasPermission("users", "create") && (
+              <Button onClick={openCreateDialog} className="sm:self-start">
+                <RiAddLine className="mr-1.5 size-4" data-icon="inline-start" />
+                Add User
+              </Button>
+            )}
           </div>
+
 
           <div className="flex items-center gap-2 max-w-sm">
             <div className="relative flex-1">
@@ -354,25 +362,32 @@ export default function UsersPage() {
                         </div>
                       </TableCell>
                       <TableCell className="text-right">
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" className="size-8 p-0">
-                              <span className="sr-only">Open Menu</span>
-                              <RiMore2Fill className="size-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="w-[140px]">
-                            <DropdownMenuItem onClick={() => openEditDialog(user)} className="cursor-pointer gap-2">
-                              <RiEditLine className="size-4 text-muted-foreground" />
-                              Edit Details
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => handleDeleteUser(user)} className="text-destructive cursor-pointer gap-2 focus:bg-destructive/10 focus:text-destructive">
-                              <RiDeleteBinLine className="size-4" />
-                              Delete User
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
+                        {(hasPermission("users", "edit") || hasPermission("users", "delete")) && (
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" className="size-8 p-0">
+                                <span className="sr-only">Open Menu</span>
+                                <RiMore2Fill className="size-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-[140px]">
+                              {hasPermission("users", "edit") && (
+                                <DropdownMenuItem onClick={() => openEditDialog(user)} className="cursor-pointer gap-2">
+                                  <RiEditLine className="size-4 text-muted-foreground" />
+                                  Edit Details
+                                </DropdownMenuItem>
+                              )}
+                              {hasPermission("users", "delete") && (
+                                <DropdownMenuItem onClick={() => handleDeleteUser(user)} className="text-destructive cursor-pointer gap-2 focus:bg-destructive/10 focus:text-destructive">
+                                  <RiDeleteBinLine className="size-4" />
+                                  Delete User
+                                </DropdownMenuItem>
+                              )}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        )}
                       </TableCell>
+
                     </TableRow>
                   ))
                 )}

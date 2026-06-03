@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { updatePermissionSchema } from "@/lib/validations/permissions";
+import { checkApiPermission } from "@/lib/rbac";
 import { z } from "zod";
 
 type RouteParams = {
@@ -9,7 +10,13 @@ type RouteParams = {
 
 export async function GET(request: NextRequest, { params }: RouteParams) {
   try {
+    const permission = await checkApiPermission(request, "permissions", "view");
+    if (!permission.authorized) {
+      return permission.errorResponse!;
+    }
+
     const { id } = await params;
+
     const perm = await prisma.permissions.findFirst({
       where: { id, status: { not: "DELETED" } },
     });
@@ -30,7 +37,13 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
 export async function PATCH(request: NextRequest, { params }: RouteParams) {
   try {
+    const permission = await checkApiPermission(request, "permissions", "edit");
+    if (!permission.authorized) {
+      return permission.errorResponse!;
+    }
+
     const { id } = await params;
+
     const body = await request.json();
     const result = updatePermissionSchema.safeParse(body);
 
@@ -109,7 +122,13 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
   try {
+    const permission = await checkApiPermission(request, "permissions", "delete");
+    if (!permission.authorized) {
+      return permission.errorResponse!;
+    }
+
     const { id } = await params;
+
 
     const existingPerm = await prisma.permissions.findFirst({
       where: { id, status: { not: "DELETED" } },

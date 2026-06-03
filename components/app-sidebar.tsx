@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import { useAuth } from "@/components/auth-context"
 
 import { NavMain } from "@/components/nav-main"
 import { NavProjects } from "@/components/nav-projects"
@@ -185,17 +186,43 @@ const data = {
 }
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
+  const { user, hasPermission } = useAuth();
+
+  const filteredNavMain = React.useMemo(() => {
+    return data.navMain.map((group) => {
+      if (group.title === "Administration") {
+        const items = group.items.filter((item) => {
+          if (item.url === "/users") return hasPermission("users", "view");
+          if (item.url === "/roles") return hasPermission("roles", "view");
+          if (item.url === "/modules") return hasPermission("modules", "view");
+          if (item.url === "/permissions") return hasPermission("permissions", "view");
+          return true;
+        });
+        return { ...group, items };
+      }
+      return group;
+    }).filter((group) => group.items && group.items.length > 0);
+  }, [hasPermission]);
+
+  const activeUser = React.useMemo(() => {
+    return {
+      name: user?.name || "Guest User",
+      email: user?.email || "guest@itvault.com",
+      avatar: "/avatars/admin.jpg",
+    };
+  }, [user]);
+
   return (
     <Sidebar collapsible="icon" {...props}>
       <SidebarHeader>
         <TeamSwitcher teams={data.teams} />
       </SidebarHeader>
       <SidebarContent>
-        <NavMain items={data.navMain} />
+        <NavMain items={filteredNavMain} />
         <NavProjects projects={data.projects} />
       </SidebarContent>
       <SidebarFooter>
-        <NavUser user={data.user} />
+        <NavUser user={activeUser} />
       </SidebarFooter>
       <SidebarRail />
     </Sidebar>

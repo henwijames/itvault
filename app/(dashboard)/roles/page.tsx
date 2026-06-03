@@ -18,9 +18,11 @@ import {
 } from "@remixicon/react";
 
 import { createRoleSchema, type CreateRoleInput } from "@/lib/validations/roles";
+import { useAuth } from "@/components/auth-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -102,10 +104,12 @@ interface Module {
 }
 
 export default function RolesPage() {
+  const { hasPermission, refreshUser } = useAuth();
   const [roles, setRoles] = useState<Role[]>([]);
   const [permissions, setPermissions] = useState<Permission[]>([]);
   const [modules, setModules] = useState<Module[]>([]);
   const [loading, setLoading] = useState(true);
+
   const [search, setSearch] = useState("");
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [editingRole, setEditingRole] = useState<Role | null>(null);
@@ -130,8 +134,8 @@ export default function RolesPage() {
     try {
       const [rolesRes, permissionsRes, modulesRes] = await Promise.all([
         axios.get("/api/roles"),
-        axios.get("/api/permissions"),
-        axios.get("/api/modules"),
+        hasPermission("permissions", "view") ? axios.get("/api/permissions") : Promise.resolve({ data: [] }),
+        hasPermission("modules", "view") ? axios.get("/api/modules") : Promise.resolve({ data: [] }),
       ]);
       setRoles(rolesRes.data);
       setPermissions(permissionsRes.data);
@@ -212,7 +216,8 @@ export default function RolesPage() {
         description: "",
         roleModulePermissions: [],
       });
-      fetchData();
+      await fetchData();
+      await refreshUser();
     } catch (err: any) {
       toast.error(err.response?.data?.error || (editingRole ? "Failed to update role" : "Failed to create role"), { id: toastId });
     } finally {
@@ -255,11 +260,14 @@ export default function RolesPage() {
                 Manage roles and define access permissions on specific modules.
               </p>
             </div>
-            <Button onClick={openCreateDialog} className="sm:self-start">
-              <RiAddLine className="mr-1.5 size-4" data-icon="inline-start" />
-              Add Role
-            </Button>
+            {hasPermission("roles", "create") && (
+              <Button onClick={openCreateDialog} className="sm:self-start">
+                <RiAddLine className="mr-1.5 size-4" data-icon="inline-start" />
+                Add Role
+              </Button>
+            )}
           </div>
+
 
           <div className="flex items-center gap-2 max-w-sm">
             <div className="relative flex-1">
@@ -327,25 +335,32 @@ export default function RolesPage() {
                         </div>
                       </TableCell>
                       <TableCell className="text-right">
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" className="size-8 p-0">
-                              <span className="sr-only">Open Menu</span>
-                              <RiMore2Fill className="size-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="w-35">
-                            <DropdownMenuItem onClick={() => openEditDialog(role)} className="cursor-pointer gap-2">
-                              <RiEditLine className="size-4 text-muted-foreground" />
-                              Edit Details
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => handleDeleteRole(role)} className="text-destructive cursor-pointer gap-2 focus:bg-destructive/10 focus:text-destructive">
-                              <RiDeleteBinLine className="size-4" />
-                              Delete Role
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
+                        {(hasPermission("roles", "edit") || hasPermission("roles", "delete")) && (
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" className="size-8 p-0">
+                                <span className="sr-only">Open Menu</span>
+                                <RiMore2Fill className="size-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-35">
+                              {hasPermission("roles", "edit") && (
+                                <DropdownMenuItem onClick={() => openEditDialog(role)} className="cursor-pointer gap-2">
+                                  <RiEditLine className="size-4 text-muted-foreground" />
+                                  Edit Details
+                                </DropdownMenuItem>
+                              )}
+                              {hasPermission("roles", "delete") && (
+                                <DropdownMenuItem onClick={() => handleDeleteRole(role)} className="text-destructive cursor-pointer gap-2 focus:bg-destructive/10 focus:text-destructive">
+                                  <RiDeleteBinLine className="size-4" />
+                                  Delete Role
+                                </DropdownMenuItem>
+                              )}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        )}
                       </TableCell>
+
                     </TableRow>
                   ))
                 )}

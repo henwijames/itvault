@@ -1,12 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { updateRoleSchema } from "@/lib/validations/roles";
+import { checkApiPermission } from "@/lib/rbac";
 
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const permission = await checkApiPermission(request, "roles", "view");
+    if (!permission.authorized) {
+      return permission.errorResponse!;
+    }
+
     const { id } = await params;
 
     const role = await prisma.roles.findUnique({
@@ -82,7 +88,13 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const permission = await checkApiPermission(request, "roles", "edit");
+    if (!permission.authorized) {
+      return permission.errorResponse!;
+    }
+
     const { id } = await params;
+
     const body = await request.json();
     const result = updateRoleSchema.safeParse(body);
 
@@ -232,7 +244,13 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const permission = await checkApiPermission(request, "roles", "delete");
+    if (!permission.authorized) {
+      return permission.errorResponse!;
+    }
+
     const { id } = await params;
+
 
     // Check if role exists
     const roleExists = await prisma.roles.findUnique({

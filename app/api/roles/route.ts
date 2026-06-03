@@ -1,10 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { createRoleSchema } from "@/lib/validations/roles";
+import { checkApiPermission } from "@/lib/rbac";
 import { z } from "zod";
 
 export async function GET(request: NextRequest) {
   try {
+    const permission = await checkApiPermission(request, "roles", "view");
+    if (!permission.authorized) {
+      return permission.errorResponse!;
+    }
+
     const roles = await prisma.roles.findMany({
       include: {
         role_module_permissions: {
@@ -72,7 +78,13 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const permission = await checkApiPermission(request, "roles", "create");
+    if (!permission.authorized) {
+      return permission.errorResponse!;
+    }
+
     const body = await request.json();
+
     const result = createRoleSchema.safeParse(body);
 
     if (!result.success) {

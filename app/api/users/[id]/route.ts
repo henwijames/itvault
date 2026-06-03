@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { updateUserSchema } from "@/lib/validations/users";
 import { hashPassword } from "@/lib/hash/password";
+import { checkApiPermission } from "@/lib/rbac";
 import { z } from "zod";
 
 type RouteParams = {
@@ -10,6 +11,11 @@ type RouteParams = {
 
 export async function GET(request: NextRequest, { params }: RouteParams) {
   try {
+    const permission = await checkApiPermission(request, "users", "view");
+    if (!permission.authorized) {
+      return permission.errorResponse!;
+    }
+
     const { id } = await params;
     const user = await prisma.users.findUnique({
       where: { id },
@@ -60,6 +66,11 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
 export async function PATCH(request: NextRequest, { params }: RouteParams) {
   try {
+    const permission = await checkApiPermission(request, "users", "edit");
+    if (!permission.authorized) {
+      return permission.errorResponse!;
+    }
+
     const { id } = await params;
     const body = await request.json();
     const result = updateUserSchema.safeParse(body);
@@ -173,6 +184,11 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
   try {
+    const permission = await checkApiPermission(request, "users", "delete");
+    if (!permission.authorized) {
+      return permission.errorResponse!;
+    }
+
     const { id } = await params;
 
     const existingUser = await prisma.users.findUnique({

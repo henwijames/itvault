@@ -88,8 +88,21 @@ model users {
   created_tickets  tickets[]         @relation("created_tickets")
   assigned_tickets tickets[]         @relation("assigned_tickets")
   comments         ticket_comments[]
+  refresh_tokens   refresh_tokens[]
 
   @@map("users")
+}
+
+model refresh_tokens {
+  id         String   @id @default(cuid())
+  user_id    String
+  token      String   @unique @db.VarChar(500)
+  expires_at DateTime
+  created_at DateTime @default(now())
+
+  user users @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@map("refresh_tokens")
 }
 
 //

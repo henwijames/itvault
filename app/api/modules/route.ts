@@ -1,10 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { createModuleSchema } from "@/lib/validations/modules";
+import { checkApiPermission } from "@/lib/rbac";
 import { z } from "zod";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
+    const permission = await checkApiPermission(request, "modules", "view");
+    if (!permission.authorized) {
+      return permission.errorResponse!;
+    }
+
     const modulesList = await prisma.modules.findMany({
       where: {
         status: {
@@ -38,6 +44,11 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
+    const permission = await checkApiPermission(request, "modules", "create");
+    if (!permission.authorized) {
+      return permission.errorResponse!;
+    }
+
     const body = await request.json();
     const result = createModuleSchema.safeParse(body);
 

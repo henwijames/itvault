@@ -2,10 +2,16 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { createUserSchema } from "@/lib/validations/users";
 import { hashPassword } from "@/lib/hash/password";
+import { checkApiPermission } from "@/lib/rbac";
 import { z } from "zod";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
+    const permission = await checkApiPermission(request, "users", "view");
+    if (!permission.authorized) {
+      return permission.errorResponse!;
+    }
+
     const usersList = await prisma.users.findMany({
       include: {
         roles: {
@@ -54,8 +60,14 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
+    const permission = await checkApiPermission(request, "users", "create");
+    if (!permission.authorized) {
+      return permission.errorResponse!;
+    }
+
     const body = await request.json();
     const result = createUserSchema.safeParse(body);
+
 
     if (!result.success) {
       return NextResponse.json(

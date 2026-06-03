@@ -1,10 +1,16 @@
 import { prisma } from "@/lib/prisma";
 import { createPermissionSchema } from "@/lib/validations/permissions";
 import { NextRequest, NextResponse } from "next/server";
+import { checkApiPermission } from "@/lib/rbac";
 import { z } from "zod";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
+    const permission = await checkApiPermission(request, "permissions", "view");
+    if (!permission.authorized) {
+      return permission.errorResponse!;
+    }
+
     const permissions = await prisma.permissions.findMany({
       where: {
         status: {
@@ -27,6 +33,11 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
+    const permission = await checkApiPermission(request, "permissions", "create");
+    if (!permission.authorized) {
+      return permission.errorResponse!;
+    }
+
     let body;
     try {
       body = await request.json();
@@ -66,14 +77,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const permission = await prisma.permissions.create({
+    const createdPermission = await prisma.permissions.create({
       data: {
         name: name.trim(),
         key: finalKey,
         description: description ? description.trim() : null,
       },
     });
-    return NextResponse.json({ permission }, { status: 200 });
+    return NextResponse.json({ permission: createdPermission }, { status: 200 });
   } catch (error) {
     console.error(error);
     return NextResponse.json(

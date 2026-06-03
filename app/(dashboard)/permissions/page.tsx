@@ -19,9 +19,11 @@ import {
 } from "@remixicon/react";
 
 import { createPermissionSchema, type CreatePermissionInput } from "@/lib/validations/permissions";
+import { useAuth } from "@/components/auth-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+
 import { Badge } from "@/components/ui/badge";
 import {
   Table,
@@ -87,8 +89,10 @@ interface Permission {
 }
 
 export default function PermissionsPage() {
+  const { hasPermission } = useAuth();
   const [permissions, setPermissions] = useState<Permission[]>([]);
   const [loading, setLoading] = useState(true);
+
   const [search, setSearch] = useState("");
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [editingPermission, setEditingPermission] = useState<Permission | null>(null);
@@ -259,11 +263,14 @@ export default function PermissionsPage() {
                 Manage system-wide permissions used to enforce functional RBAC security.
               </p>
             </div>
-            <Button onClick={openCreateDialog} className="sm:self-start">
-              <RiAddLine className="mr-1.5 size-4" data-icon="inline-start" />
-              Add Permission
-            </Button>
+            {hasPermission("permissions", "create") && (
+              <Button onClick={openCreateDialog} className="sm:self-start">
+                <RiAddLine className="mr-1.5 size-4" data-icon="inline-start" />
+                Add Permission
+              </Button>
+            )}
           </div>
+
 
           <div className="flex items-center gap-2 max-w-sm">
             <div className="relative flex-1">
@@ -328,25 +335,32 @@ export default function PermissionsPage() {
                         </Badge>
                       </TableCell>
                       <TableCell className="text-right">
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" className="size-8 p-0">
-                              <span className="sr-only">Open Menu</span>
-                              <RiMore2Fill className="size-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="w-[140px]">
-                            <DropdownMenuItem onClick={() => openEditDialog(permission)} className="cursor-pointer gap-2">
-                              <RiEditLine className="size-4 text-muted-foreground" />
-                              Edit Details
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => handleDeletePermission(permission)} className="text-destructive cursor-pointer gap-2 focus:bg-destructive/10 focus:text-destructive">
-                              <RiDeleteBinLine className="size-4" />
-                              Delete Perm
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
+                        {(hasPermission("permissions", "edit") || hasPermission("permissions", "delete")) && (
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" className="size-8 p-0">
+                                <span className="sr-only">Open Menu</span>
+                                <RiMore2Fill className="size-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-[140px]">
+                              {hasPermission("permissions", "edit") && (
+                                <DropdownMenuItem onClick={() => openEditDialog(permission)} className="cursor-pointer gap-2">
+                                  <RiEditLine className="size-4 text-muted-foreground" />
+                                  Edit Details
+                                </DropdownMenuItem>
+                              )}
+                              {hasPermission("permissions", "delete") && (
+                                <DropdownMenuItem onClick={() => handleDeletePermission(permission)} className="text-destructive cursor-pointer gap-2 focus:bg-destructive/10 focus:text-destructive">
+                                  <RiDeleteBinLine className="size-4" />
+                                  Delete Perm
+                                </DropdownMenuItem>
+                              )}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        )}
                       </TableCell>
+
                     </TableRow>
                   ))
                 )}

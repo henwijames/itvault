@@ -19,10 +19,12 @@ import {
 } from "@remixicon/react";
 
 import { createModuleSchema, type CreateModuleInput } from "@/lib/validations/modules";
+import { useAuth } from "@/components/auth-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Table,
@@ -91,9 +93,11 @@ interface Module {
 
 
 export default function ModulesPage() {
+  const { hasPermission } = useAuth();
   const [modules, setModules] = useState<Module[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [editingModule, setEditingModule] = useState<Module | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -258,11 +262,14 @@ export default function ModulesPage() {
                 Manage system capability modules, binding them to access keys and user privileges.
               </p>
             </div>
-            <Button onClick={openCreateDialog} className="sm:self-start">
-              <RiAddLine className="mr-1.5 size-4" data-icon="inline-start" />
-              Add Module
-            </Button>
+            {hasPermission("modules", "create") && (
+              <Button onClick={openCreateDialog} className="sm:self-start">
+                <RiAddLine className="mr-1.5 size-4" data-icon="inline-start" />
+                Add Module
+              </Button>
+            )}
           </div>
+
  
           <div className="flex items-center gap-2 max-w-sm">
             <div className="relative flex-1">
@@ -321,25 +328,32 @@ export default function ModulesPage() {
                         {getStatusBadge(mod.status)}
                       </TableCell>
                       <TableCell className="text-right">
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" className="size-8 p-0">
-                              <span className="sr-only">Open Menu</span>
-                              <RiMore2Fill className="size-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="w-[140px]">
-                            <DropdownMenuItem onClick={() => openEditDialog(mod)} className="cursor-pointer gap-2">
-                              <RiEditLine className="size-4 text-muted-foreground" />
-                              Edit Details
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => handleDeleteModule(mod)} className="text-destructive cursor-pointer gap-2 focus:bg-destructive/10 focus:text-destructive">
-                              <RiDeleteBinLine className="size-4" />
-                              Delete Module
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
+                        {(hasPermission("modules", "edit") || hasPermission("modules", "delete")) && (
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" className="size-8 p-0">
+                                <span className="sr-only">Open Menu</span>
+                                <RiMore2Fill className="size-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-[140px]">
+                              {hasPermission("modules", "edit") && (
+                                <DropdownMenuItem onClick={() => openEditDialog(mod)} className="cursor-pointer gap-2">
+                                  <RiEditLine className="size-4 text-muted-foreground" />
+                                  Edit Details
+                                </DropdownMenuItem>
+                              )}
+                              {hasPermission("modules", "delete") && (
+                                <DropdownMenuItem onClick={() => handleDeleteModule(mod)} className="text-destructive cursor-pointer gap-2 focus:bg-destructive/10 focus:text-destructive">
+                                  <RiDeleteBinLine className="size-4" />
+                                  Delete Module
+                                </DropdownMenuItem>
+                              )}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        )}
                       </TableCell>
+
                     </TableRow>
                   ))
                 )}
