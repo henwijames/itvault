@@ -13,7 +13,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <div className="flex flex-col items-center gap-3">
           <RiSettingsLine className="size-10 animate-spin text-primary" />
           <span className="text-sm font-semibold text-muted-foreground">
-            Authenticating session...
+            IT VAULT
           </span>
         </div>
       </div>
