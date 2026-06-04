@@ -6,9 +6,13 @@ import { z } from "zod";
 
 export async function GET(request: NextRequest) {
   try {
-    const permission = await checkApiPermission(request, "roles", "view");
+    let permission = await checkApiPermission(request, "roles", "view");
     if (!permission.authorized) {
-      return permission.errorResponse!;
+      const userCreatePerm = await checkApiPermission(request, "users", "create");
+      const userEditPerm = await checkApiPermission(request, "users", "edit");
+      if (!userCreatePerm.authorized && !userEditPerm.authorized) {
+        return permission.errorResponse!;
+      }
     }
 
     const roles = await prisma.roles.findMany({

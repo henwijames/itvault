@@ -27,3 +27,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
     - Extract expensive work into memoized components or use `useMemo`/`useCallback` appropriately.
     - Pass functions to `useState` for expensive initial state values.
   - **Client-Side Rendering:** If dynamic state or event handlers (such as button clicks in dialogs) are used, mark components with `"use client"` at the top of the file. Minimize data passed from RSC to Client Components.
+
+## 3. Strict Typing
+- **CRITICAL:** Always add explicit types to all variables, parameters, functions, and structures.
+- **CRITICAL:** Avoid using `any`. Instead, define appropriate interfaces, types, type assertions, generics, or type guards.

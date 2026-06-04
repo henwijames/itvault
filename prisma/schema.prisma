@@ -65,6 +65,12 @@ enum module_status {
   DELETED
 }
 
+enum branch_status {
+  ACTIVE
+  INACTIVE
+  DELETED
+}
+
 //
 // USERS (LOGIN)
 //
@@ -118,25 +124,25 @@ model roles {
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
 
-  users       user_roles[]
-  permissions role_permissions[]
-  modules     role_modules[]
+  users                   user_roles[]
+  permissions             role_permissions[]
+  modules                 role_modules[]
   role_module_permissions role_module_permissions[]
 
   @@map("roles")
 }
 
 model modules {
-  id          String   @id @default(cuid())
-  name        String   @unique
-  code        String   @unique
+  id          String        @id @default(cuid())
+  name        String        @unique
+  code        String        @unique
   description String?
   status      module_status @default(ACTIVE)
 
-  created_at  DateTime @default(now())
-  updated_at  DateTime @updatedAt
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
 
-  roles       role_modules[]
+  roles                   role_modules[]
   role_module_permissions role_module_permissions[]
 
   @@map("modules")
@@ -145,15 +151,15 @@ model modules {
 model permissions {
   id String @id @default(cuid())
 
-  name        String  @unique
-  key         String  @unique
+  name        String            @unique
+  key         String            @unique
   description String?
   status      permission_status @default(ACTIVE)
 
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
 
-  roles role_permissions[]
+  roles                   role_permissions[]
   role_module_permissions role_module_permissions[]
 
   @@map("permissions")
@@ -215,6 +221,7 @@ model branches {
   name    String
   code    String?
   address String?
+  status  branch_status @default(ACTIVE)
 
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
