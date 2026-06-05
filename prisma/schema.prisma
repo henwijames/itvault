@@ -233,6 +233,7 @@ model branches {
   internet_accounts_original internet_accounts[] @relation("original_branch")
 
   subscriptions subscriptions[]
+  borrowed_assets asset_borrow_logs[] @relation("borrowing_branch")
 
   @@map("branches")
 }
@@ -269,6 +270,7 @@ model staff {
 
   tickets           tickets[]
   internet_accounts internet_accounts[]
+  asset_borrow_logs asset_borrow_logs[]
 
   @@map("staff")
 }
@@ -406,12 +408,15 @@ model assets {
 
   status asset_status @default(ACTIVE)
 
+  quantity Int @default(1)
+
   notes String? @db.Text
 
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
 
-  branch branches @relation(fields: [branch_id], references: [id])
+  branch      branches            @relation(fields: [branch_id], references: [id])
+  borrow_logs asset_borrow_logs[]
 
   @@map("assets")
 }
@@ -517,4 +522,25 @@ model ticket_activities {
   ticket tickets @relation(fields: [ticket_id], references: [id])
 
   @@map("ticket_activities")
+}
+
+//
+// ASSET BORROW LOGS
+//
+
+model asset_borrow_logs {
+  id                  String   @id @default(cuid())
+  asset_id            String
+  staff_id            String?
+  borrowing_branch_id String?
+  quantity            Int
+  borrowed_at         DateTime @default(now())
+  returned_at         DateTime?
+  notes               String?  @db.Text
+
+  asset            assets    @relation(fields: [asset_id], references: [id], onDelete: Cascade)
+  staff            staff?    @relation(fields: [staff_id], references: [id], onDelete: Cascade)
+  borrowing_branch branches? @relation("borrowing_branch", fields: [borrowing_branch_id], references: [id], onDelete: Cascade)
+
+  @@map("asset_borrow_logs")
 }

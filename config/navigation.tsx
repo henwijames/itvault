@@ -94,6 +94,11 @@ export const navigationData: {
           title: "Subscriptions",
           url: "/subscriptions",
           permission: { module: "subscriptions", action: "view" },
+        },
+        {
+          title: "Assets",
+          url: "/assets",
+          permission: { module: "assets", action: "view" },
         }
       ]
     },
