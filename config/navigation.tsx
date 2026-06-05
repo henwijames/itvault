@@ -10,6 +10,8 @@ import {
   RiCropLine,
   RiPieChartLine,
   RiMapLine,
+  RiOrganizationChart,
+  RiMacbookLine,
 } from "@remixicon/react"
 
 export const navigationData: {
@@ -34,7 +36,7 @@ export const navigationData: {
       icon: <RiLineChartLine />,
     },
     {
-      title: "Administration",
+      title: "Access Management",
       url: "#",
       icon: <RiShieldUserLine />,
       isActive: true,
@@ -43,11 +45,6 @@ export const navigationData: {
           title: "Users",
           url: "/users",
           permission: { module: "users", action: "view" },
-        },
-        {
-          title: "Branches",
-          url: "/branches",
-          permission: { module: "branches", action: "view" },
         },
         {
           title: "Roles",
@@ -65,6 +62,35 @@ export const navigationData: {
           permission: { module: "permissions", action: "view" },
         },
       ],
-    }
+    },
+    {
+      title: "Organization",
+      url: "#",
+      icon: <RiOrganizationChart />,
+      items: [
+        {
+          title: "Branches",
+          url: "/branches",
+          permission: { module: "branches", action: "view" },
+        },
+        {
+          title: "Staffs",
+          url: "/staff",
+          permission: { module: "staff", action: "view" },
+        }
+      ]
+    },
+    {
+      title: "IT Service Desk",
+      url: "#",
+      icon: <RiMacbookLine />,
+      items: [
+        {
+          title: "Internet Accounts",
+          url: "/internet-accounts",
+          permission: { module: "internet_accounts", action: "view" },
+        }
+      ]
+    },
   ],
 }

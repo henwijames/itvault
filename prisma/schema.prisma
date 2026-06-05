@@ -256,13 +256,19 @@ model staff {
   position  String?
   is_active Boolean @default(true)
 
+  contact_number     String?
+  date_of_birth      DateTime?
+  emirates_id_number String?
+  emirates_id_expiry DateTime?
+
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
 
   user   users?   @relation(fields: [user_id], references: [id])
   branch branches @relation(fields: [branch_id], references: [id])
 
-  tickets tickets[]
+  tickets           tickets[]
+  internet_accounts internet_accounts[]
 
   @@map("staff")
 }
@@ -276,20 +282,15 @@ model internet_accounts {
 
   branch_id          String
   original_branch_id String?
+  account_holder_id  String?
 
   account_type account_type
+  status       internet_account_status @default(NEW)
 
   provider_source String?
 
-  account_holder_name String
-  contact_number      String?
-
   account_number  String
   shipment_number String?
-
-  date_of_birth      DateTime?
-  emirates_id_number String?
-  emirates_id_expiry DateTime?
 
   start_date        DateTime?
   contract_end_date DateTime?
@@ -301,10 +302,31 @@ model internet_accounts {
 
   branch          branches  @relation("current_branch", fields: [branch_id], references: [id])
   original_branch branches? @relation("original_branch", fields: [original_branch_id], references: [id])
+  account_holder  staff?    @relation(fields: [account_holder_id], references: [id])
 
-  migrations internet_account_migrations[]
+  migrations  internet_account_migrations[]
+  status_logs internet_account_status_logs[]
 
   @@map("internet_accounts")
+}
+
+enum internet_account_status {
+  NEW
+  RENEWED
+  FOR_CANCELLATION
+  CANCELLED
+}
+
+model internet_account_status_logs {
+  id                  String                  @id @default(cuid())
+  internet_account_id String
+  status              internet_account_status
+  notes               String?                 @db.Text
+  created_at          DateTime                @default(now())
+
+  internet_account internet_accounts @relation(fields: [internet_account_id], references: [id], onDelete: Cascade)
+
+  @@map("internet_account_status_logs")
 }
 
 //

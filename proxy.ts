@@ -12,7 +12,7 @@ interface TokenPayload {
   permissions: Record<string, string[]>;
 }
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // Ignore static assets, images, favicon, api/auth routes
@@ -135,6 +135,13 @@ function checkPathPermissions(pathname: string, payload: TokenPayload, request: 
   if (pathname.startsWith("/users")) {
     const userPerms = permissions["users"] || [];
     if (!userPerms.includes("view")) {
+      return NextResponse.redirect(new URL("/dashboard?error=unauthorized", request.url));
+    }
+  }
+
+  if (pathname.startsWith("/staff")) {
+    const staffPerms = permissions["staff"] || [];
+    if (!staffPerms.includes("view")) {
       return NextResponse.redirect(new URL("/dashboard?error=unauthorized", request.url));
     }
   }

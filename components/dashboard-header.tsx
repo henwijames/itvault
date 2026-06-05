@@ -55,6 +55,11 @@ const breadcrumbConfig: Record<string, BreadcrumbConfig> = {
     label: "Branches Page",
     icon: <RiCpuLine className="size-4 text-muted-foreground" />,
   },
+  "/staff": {
+    parent: "Administration",
+    label: "Staff Administration",
+    icon: <RiUserLine className="size-4 text-muted-foreground" />,
+  },
 };
 
 export function DashboardHeader() {

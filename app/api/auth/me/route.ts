@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { verifyAccessToken, getUserPermissions } from "@/lib/auth";
+import { verifyAccessToken, getUserPermissions, signAccessToken } from "@/lib/auth";
 
 export async function GET(request: NextRequest) {
   try {
@@ -17,7 +17,14 @@ export async function GET(request: NextRequest) {
 
     const permissions = await getUserPermissions(payload.userId);
 
-    return NextResponse.json({
+    const newAccessToken = await signAccessToken({
+      userId: payload.userId,
+      name: payload.name,
+      email: payload.email,
+      permissions,
+    });
+
+    const response = NextResponse.json({
       user: {
         id: payload.userId,
         name: payload.name,
@@ -25,6 +32,16 @@ export async function GET(request: NextRequest) {
       },
       permissions,
     });
+
+    response.cookies.set("access_token", newAccessToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      path: "/",
+      maxAge: 15 * 60, // 15 minutes
+    });
+
+    return response;
   } catch (error: any) {
     console.error("Auth me error:", error);
     return NextResponse.json(
