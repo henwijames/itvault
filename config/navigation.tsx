@@ -99,6 +99,11 @@ export const navigationData: {
           title: "Assets",
           url: "/assets",
           permission: { module: "assets", action: "view" },
+        },
+        {
+          title: "Tickets",
+          url: "/tickets",
+          permission: { module: "tickets", action: "view" },
         }
       ]
     },
