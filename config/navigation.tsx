@@ -89,6 +89,11 @@ export const navigationData: {
           title: "Internet Accounts",
           url: "/internet-accounts",
           permission: { module: "internet_accounts", action: "view" },
+        },
+        {
+          title: "Subscriptions",
+          url: "/subscriptions",
+          permission: { module: "subscriptions", action: "view" },
         }
       ]
     },
